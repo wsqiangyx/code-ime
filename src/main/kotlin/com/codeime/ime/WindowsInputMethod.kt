@@ -25,7 +25,7 @@ import javax.swing.SwingUtilities
  */
 class WindowsInputMethod : InputMethodController {
 
-    private val log = Logger.getInstance(WindowsInputMethod::class.java)
+    private val log = Logger.getInstance("CodeIME.Diag")
     private val robot: Robot? by lazy {
         try {
             Robot()
@@ -44,19 +44,29 @@ class WindowsInputMethod : InputMethodController {
     override fun currentMode(): ImeMode? = callOnEdt { currentModeInternal() }
 
     override fun switchTo(target: ImeMode): SwitchResult {
-        if (!isAvailable()) return SwitchResult.FAILED
-        if (callOnEdt { currentModeInternal() } == target) return SwitchResult.NOOP
+        if (!isAvailable()) { log.info("switchTo skip: unavailable"); return SwitchResult.FAILED }
+        val current = callOnEdt { currentModeInternal() }
+        log.info("switchTo target=$target current=$current")
+        if (current == target) return SwitchResult.NOOP
 
         val settings = CodeImeSettings.getInstance().state
 
-        if (settings.useDirectImmSet && callOnEdt { directSetInternal(target) }) {
-            if (verifyOnEdt(target)) return SwitchResult.DIRECT
+        if (settings.useDirectImmSet) {
+            val directOk = callOnEdt { directSetInternal(target) }
+            log.info("directSet ok=$directOk")
+            if (directOk && verifyOnEdt(target)) return SwitchResult.DIRECT
         }
 
-        if (settings.hotkeyCode != 0 && pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)) {
+        // 微软拼音会忽略间隔过短的连续 Shift 切换：失败后自动再试一次（pressHotkey 内部会等待足够间隔）
+        var hotkeyAttempts = 0
+        while (hotkeyAttempts < 2 && settings.hotkeyCode != 0) {
+            if (!pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)) break
+            log.info("hotkey pressed attempt=$hotkeyAttempts code=${settings.hotkeyCode} mods=${settings.hotkeyModifiers}")
             if (verifyOnEdt(target)) return SwitchResult.HOTKEY
+            hotkeyAttempts++
         }
 
+        log.info("switchTo FAILED target=$target")
         return SwitchResult.FAILED
     }
 
@@ -111,7 +121,9 @@ class WindowsInputMethod : InputMethodController {
         var attempts = 0
         while (attempts < VERIFY_POLL_COUNT) {
             sleepQuietly(VERIFY_POLL_INTERVAL_MS)
-            if (callOnEdt { currentModeInternal() } == target) return true
+            val mode = callOnEdt { currentModeInternal() }
+            log.info("verify #$attempts mode=$mode want=$target")
+            if (mode == target) return true
             attempts++
         }
         return false
@@ -132,9 +144,12 @@ class WindowsInputMethod : InputMethodController {
 
     private fun pressHotkey(keyCode: Int, modifiers: Int): Boolean {
         val r = robot ?: return false
-        val now = System.currentTimeMillis()
-        if (now - lastHotkeyAt < HOTKEY_MIN_INTERVAL_MS) return false
-        lastHotkeyAt = now
+        // 微软拼音会忽略短间隔内的连续 Shift 切换：确保距上一次按键有足够间隔
+        val sinceLast = System.currentTimeMillis() - lastHotkeyAt
+        if (sinceLast in 0 until HOTKEY_REPEAT_DELAY_MS) {
+            sleepQuietly(HOTKEY_REPEAT_DELAY_MS - sinceLast)
+        }
+        lastHotkeyAt = System.currentTimeMillis()
 
         val modifierKeys = listOf(
             InputEvent.CTRL_DOWN_MASK to KeyEvent.VK_CONTROL,
@@ -146,6 +161,7 @@ class WindowsInputMethod : InputMethodController {
         synchronized(robotLock) {
             modifierKeys.forEach { r.keyPress(it) }
             r.keyPress(keyCode)
+            sleepQuietly(HOTKEY_HOLD_MS) // 保持一小段按住时长，模拟人类按键节奏
             r.keyRelease(keyCode)
             modifierKeys.reversed().forEach { r.keyRelease(it) }
         }
@@ -163,6 +179,11 @@ class WindowsInputMethod : InputMethodController {
     companion object {
         private const val VERIFY_POLL_COUNT = 6
         private const val VERIFY_POLL_INTERVAL_MS = 70L
-        private const val HOTKEY_MIN_INTERVAL_MS = 120L
+
+        /** 微软拼音忽略短间隔内的连续 Shift 切换：两次模拟按键的最小间隔 */
+        private const val HOTKEY_REPEAT_DELAY_MS = 2000L
+
+        /** 模拟按键的按住时长，模拟人类节奏 */
+        private const val HOTKEY_HOLD_MS = 40L
     }
 }

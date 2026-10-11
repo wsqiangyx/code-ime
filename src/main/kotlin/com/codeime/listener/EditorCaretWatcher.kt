@@ -34,7 +34,7 @@ import javax.swing.Timer
  */
 class EditorCaretWatcher {
 
-    private val log = Logger.getInstance(EditorCaretWatcher::class.java)
+    private val log = Logger.getInstance("CodeIME.Diag")
     private val switchExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "CodeIME-Switcher").apply { isDaemon = true }
     }
@@ -97,6 +97,13 @@ class EditorCaretWatcher {
     private fun onCaretChanged(editor: Editor) {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
+        log.info(
+            "caretChanged offset=${editor.caretModel.offset} " +
+                "line=${editor.document.getLineNumber(editor.caretModel.offset)} " +
+                "sel=${editor.selectionModel.hasSelection()} " +
+                "focus=${editor.contentComponent.hasFocus()} " +
+                "active=${ApplicationManager.getApplication()?.isActive()}"
+        )
         val state = stateFor(editor)
         // 50ms 防抖：连续光标事件只保留最后一次
         val timer = state.timer ?: Timer(DEBOUNCE_MS) { evaluate(project, editor) }.also {
@@ -108,13 +115,13 @@ class EditorCaretWatcher {
 
     private fun evaluate(project: com.intellij.openapi.project.Project, editor: Editor) {
         val app = ApplicationManager.getApplication() ?: return
-        if (!app.isActive()) return
+        if (!app.isActive()) { log.info("evaluate skip: app inactive"); return }
         if (editor.isDisposed) return
-        if (editor.selectionModel.hasSelection()) return
+        if (editor.selectionModel.hasSelection()) { log.info("evaluate skip: selection"); return }
         // 设置弹窗等抢焦点时不切换，模拟按键只会打进别的界面
-        if (!editor.contentComponent.hasFocus()) return
+        if (!editor.contentComponent.hasFocus()) { log.info("evaluate skip: no focus"); return }
         val settings = CodeImeSettings.getInstance().state
-        if (!settings.enabled) return
+        if (!settings.enabled) { log.info("evaluate skip: disabled"); return }
 
         val context = ReadAction.compute<EditorContext, RuntimeException> {
             ContextAnalyzer.analyze(editor, project)
@@ -135,6 +142,11 @@ class EditorCaretWatcher {
         } ?: return
 
         val state = stateFor(editor)
+        log.info(
+            "evaluate: offset=${editor.caretModel.offset} ctx=$context effective=$effective " +
+                "target=$target last=${state.lastContext} " +
+                "cooldown=${target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS}"
+        )
         if (effective == state.lastContext) return // 同一上下文内移动，不动作
 
         // 失败冷却：短时间内不对同一目标反复尝试
@@ -146,6 +158,7 @@ class EditorCaretWatcher {
         switchExecutor.execute {
             try {
                 val result = InputMethodManager.instance.switchTo(target)
+                log.info("switch result=$result target=$target")
                 if (result == SwitchResult.FAILED) {
                     consecutiveFailures++
                     lastFailedTarget = target
