@@ -44,16 +44,16 @@ class WindowsInputMethod : InputMethodController {
     override fun currentMode(): ImeMode? = callOnEdt { currentModeInternal() }
 
     override fun switchTo(target: ImeMode): SwitchResult {
-        if (!isAvailable()) { log.info("switchTo skip: unavailable"); return SwitchResult.FAILED }
+        if (!isAvailable()) { log.debug("switchTo skip: unavailable"); return SwitchResult.FAILED }
         val current = callOnEdt { currentModeInternal() }
-        log.info("switchTo target=$target current=$current")
+        log.debug("switchTo target=$target current=$current")
         if (current == target) return SwitchResult.NOOP
 
         val settings = CodeImeSettings.getInstance().state
 
         if (settings.useDirectImmSet) {
             val directOk = callOnEdt { directSetInternal(target) }
-            log.info("directSet ok=$directOk")
+            log.debug("directSet ok=$directOk")
             if (directOk && verifyOnEdt(target)) return SwitchResult.DIRECT
         }
 
@@ -61,12 +61,12 @@ class WindowsInputMethod : InputMethodController {
         var hotkeyAttempts = 0
         while (hotkeyAttempts < 2 && settings.hotkeyCode != 0) {
             if (!pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)) break
-            log.info("hotkey pressed attempt=$hotkeyAttempts code=${settings.hotkeyCode} mods=${settings.hotkeyModifiers}")
+            log.debug("hotkey pressed attempt=$hotkeyAttempts code=${settings.hotkeyCode} mods=${settings.hotkeyModifiers}")
             if (verifyOnEdt(target)) return SwitchResult.HOTKEY
             hotkeyAttempts++
         }
 
-        log.info("switchTo FAILED target=$target")
+        log.debug("switchTo FAILED target=$target")
         return SwitchResult.FAILED
     }
 
@@ -122,7 +122,7 @@ class WindowsInputMethod : InputMethodController {
         while (attempts < VERIFY_POLL_COUNT) {
             sleepQuietly(VERIFY_POLL_INTERVAL_MS)
             val mode = callOnEdt { currentModeInternal() }
-            log.info("verify #$attempts mode=$mode want=$target")
+            log.debug("verify #$attempts mode=$mode want=$target")
             if (mode == target) return true
             attempts++
         }

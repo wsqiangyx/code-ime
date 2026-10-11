@@ -97,7 +97,7 @@ class EditorCaretWatcher {
     private fun onCaretChanged(editor: Editor) {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
-        log.info(
+        log.debug(
             "caretChanged offset=${editor.caretModel.offset} " +
                 "line=${editor.document.getLineNumber(editor.caretModel.offset)} " +
                 "sel=${editor.selectionModel.hasSelection()} " +
@@ -115,13 +115,13 @@ class EditorCaretWatcher {
 
     private fun evaluate(project: com.intellij.openapi.project.Project, editor: Editor) {
         val app = ApplicationManager.getApplication() ?: return
-        if (!app.isActive()) { log.info("evaluate skip: app inactive"); return }
+        if (!app.isActive()) { log.debug("evaluate skip: app inactive"); return }
         if (editor.isDisposed) return
-        if (editor.selectionModel.hasSelection()) { log.info("evaluate skip: selection"); return }
+        if (editor.selectionModel.hasSelection()) { log.debug("evaluate skip: selection"); return }
         // 设置弹窗等抢焦点时不切换，模拟按键只会打进别的界面
-        if (!editor.contentComponent.hasFocus()) { log.info("evaluate skip: no focus"); return }
+        if (!editor.contentComponent.hasFocus()) { log.debug("evaluate skip: no focus"); return }
         val settings = CodeImeSettings.getInstance().state
-        if (!settings.enabled) { log.info("evaluate skip: disabled"); return }
+        if (!settings.enabled) { log.debug("evaluate skip: disabled"); return }
 
         val context = ReadAction.compute<EditorContext, RuntimeException> {
             ContextAnalyzer.analyze(editor, project)
@@ -142,7 +142,7 @@ class EditorCaretWatcher {
         } ?: return
 
         val state = stateFor(editor)
-        log.info(
+        log.debug(
             "evaluate: offset=${editor.caretModel.offset} ctx=$context effective=$effective " +
                 "target=$target last=${state.lastContext} " +
                 "cooldown=${target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS}"
@@ -158,7 +158,7 @@ class EditorCaretWatcher {
         switchExecutor.execute {
             try {
                 val result = InputMethodManager.instance.switchTo(target)
-                log.info("switch result=$result target=$target")
+                log.debug("switch result=$result target=$target")
                 if (result == SwitchResult.FAILED) {
                     consecutiveFailures++
                     lastFailedTarget = target
