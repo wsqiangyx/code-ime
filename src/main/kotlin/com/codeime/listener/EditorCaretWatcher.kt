@@ -20,6 +20,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import javax.swing.Timer
 
 /**
@@ -44,6 +45,9 @@ class EditorCaretWatcher {
     @Volatile private var lastFailedTarget: ImeMode? = null
     @Volatile private var lastFailedAt = 0L
     @Volatile private var consecutiveFailures = 0
+
+    // 切换请求代次：方向键快速连穿多个上下文时，只执行最后一次的切换请求
+    private val switchGeneration = AtomicLong(0)
 
     fun start() {
         if (started) return
@@ -155,7 +159,12 @@ class EditorCaretWatcher {
         }
         state.lastContext = effective
 
+        val gen = switchGeneration.incrementAndGet()
         switchExecutor.execute {
+            if (switchGeneration.get() != gen) {
+                log.debug("switch skipped: stale (gen=$gen current=${switchGeneration.get()})")
+                return@execute
+            }
             try {
                 val result = InputMethodManager.instance.switchTo(target)
                 log.debug("switch result=$result target=$target")
@@ -206,7 +215,7 @@ class EditorCaretWatcher {
         private val ATTACHED_KEY = Key.create<Boolean>("CodeIME.attached")
         private val ATTACHED_LISTENER_KEY = Key.create<CaretListener>("CodeIME.caretListener")
         private val STATE_KEY = Key.create<EditorState>("CodeIME.editorState")
-        private const val DEBOUNCE_MS = 50
+        private const val DEBOUNCE_MS = 30
         private const val FAILURE_COOLDOWN_MS = 1500
     }
 }

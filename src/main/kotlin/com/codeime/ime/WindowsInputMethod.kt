@@ -57,13 +57,16 @@ class WindowsInputMethod : InputMethodController {
             if (directOk && verifyOnEdt(target)) return SwitchResult.DIRECT
         }
 
-        // 微软拼音会忽略间隔过短的连续 Shift 切换：失败后自动再试一次（pressHotkey 内部会等待足够间隔）
-        var hotkeyAttempts = 0
-        while (hotkeyAttempts < 2 && settings.hotkeyCode != 0) {
+        // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换。
+        // 先立即按（多数场景距上次按键已较远，~100ms 内生效）；被忽略再以递增间隔重试。
+        val retryWaits = longArrayOf(0L, 1200L, 2400L)
+        var attempt = 0
+        while (attempt < retryWaits.size && settings.hotkeyCode != 0) {
+            sleepQuietly(retryWaits[attempt])
             if (!pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)) break
-            log.debug("hotkey pressed attempt=$hotkeyAttempts code=${settings.hotkeyCode} mods=${settings.hotkeyModifiers}")
+            log.debug("hotkey pressed attempt=$attempt code=${settings.hotkeyCode} mods=${settings.hotkeyModifiers}")
             if (verifyOnEdt(target)) return SwitchResult.HOTKEY
-            hotkeyAttempts++
+            attempt++
         }
 
         log.debug("switchTo FAILED target=$target")
@@ -144,10 +147,10 @@ class WindowsInputMethod : InputMethodController {
 
     private fun pressHotkey(keyCode: Int, modifiers: Int): Boolean {
         val r = robot ?: return false
-        // 微软拼音会忽略短间隔内的连续 Shift 切换：确保距上一次按键有足够间隔
+        // 避免与上一次按键构成过近的“双击”：保证最小按键间隔
         val sinceLast = System.currentTimeMillis() - lastHotkeyAt
-        if (sinceLast in 0 until HOTKEY_REPEAT_DELAY_MS) {
-            sleepQuietly(HOTKEY_REPEAT_DELAY_MS - sinceLast)
+        if (sinceLast in 0 until HOTKEY_MIN_SPACING_MS) {
+            sleepQuietly(HOTKEY_MIN_SPACING_MS - sinceLast)
         }
         lastHotkeyAt = System.currentTimeMillis()
 
@@ -177,11 +180,11 @@ class WindowsInputMethod : InputMethodController {
     }
 
     companion object {
-        private const val VERIFY_POLL_COUNT = 6
-        private const val VERIFY_POLL_INTERVAL_MS = 70L
+        private const val VERIFY_POLL_COUNT = 4
+        private const val VERIFY_POLL_INTERVAL_MS = 60L
 
-        /** 微软拼音忽略短间隔内的连续 Shift 切换：两次模拟按键的最小间隔 */
-        private const val HOTKEY_REPEAT_DELAY_MS = 2000L
+        /** 两次模拟按键的最小间隔，避免构成过近的“双击” */
+        private const val HOTKEY_MIN_SPACING_MS = 250L
 
         /** 模拟按键的按住时长，模拟人类节奏 */
         private const val HOTKEY_HOLD_MS = 40L

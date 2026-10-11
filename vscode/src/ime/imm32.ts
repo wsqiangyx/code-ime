@@ -9,9 +9,13 @@ const VK_SHIFT = 0x10;
 const VK_CONTROL = 0x11;
 const VK_SPACE = 0x20;
 
-// 轮询校验：总等待 ~420ms，容忍微软拼音经 TSF 应用新模式的滞后
-const VERIFY_POLL_COUNT = 6;
-const VERIFY_POLL_INTERVAL_MS = 70;
+// 轮询校验：总等待 ~240ms，容忍微软拼音经 TSF 应用新模式的滞后
+const VERIFY_POLL_COUNT = 4;
+const VERIFY_POLL_INTERVAL_MS = 60;
+// 两次模拟按键的最小间隔，避免构成过近的“双击”
+const HOTKEY_MIN_SPACING_MS = 250;
+// 模拟按键的按住时长，模拟人类节奏
+const HOTKEY_HOLD_MS = 40;
 
 let ready = false;
 // koffi 的 .d.ts 对 func() 参数有严格限制，这里统一放宽为 any（运行时 API 以字符串描述类型）
@@ -136,6 +140,20 @@ async function verify(target: ImeMode): Promise<boolean> {
   return false;
 }
 
+let lastHotkeyAt = 0;
+
+/** 模拟一次中英切换热键（含最小间隔与按住时长的人类化节奏） */
+async function pressHotkey(vks: number[]): Promise<void> {
+  const sinceLast = Date.now() - lastHotkeyAt;
+  if (sinceLast >= 0 && sinceLast < HOTKEY_MIN_SPACING_MS) {
+    await sleep(HOTKEY_MIN_SPACING_MS - sinceLast);
+  }
+  lastHotkeyAt = Date.now();
+  for (const vk of vks) keybdEventFn(vk, 0, 0, 0);
+  await sleep(HOTKEY_HOLD_MS);
+  for (const vk of [...vks].reverse()) keybdEventFn(vk, 0, KEYEVENTF_KEYUP, 0);
+}
+
 export async function switchTo(
   target: ImeMode,
   hotkeyName: string,
@@ -148,16 +166,21 @@ export async function switchTo(
     if (await verify(target)) return 'direct';
   }
 
+  // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换。
+  // 先立即按；被忽略再以递增间隔重试。
   const vks = parseHotkey(hotkeyName);
+  const retryWaits = [0, 1200, 2400];
   if (vks.length) {
-    try {
-      for (const vk of vks) keybdEventFn(vk, 0, 0, 0);
-      for (const vk of [...vks].reverse()) keybdEventFn(vk, 0, KEYEVENTF_KEYUP, 0);
-    } catch (e) {
-      console.error('[CodeIME] 模拟热键失败:', e);
-      return 'failed';
+    for (let attempt = 0; attempt < retryWaits.length; attempt++) {
+      await sleep(retryWaits[attempt]);
+      try {
+        await pressHotkey(vks);
+      } catch (e) {
+        console.error('[CodeIME] 模拟热键失败:', e);
+        return 'failed';
+      }
+      if (await verify(target)) return 'hotkey';
     }
-    if (await verify(target)) return 'hotkey';
   }
   return 'failed';
 }
