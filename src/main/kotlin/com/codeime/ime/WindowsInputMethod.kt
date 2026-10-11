@@ -161,29 +161,30 @@ class WindowsInputMethod : InputMethodController {
         if (isKeyHeld(keyCode) || modifierVks.any { isKeyHeld(it) }) return false
         lastHotkeyAt = System.currentTimeMillis()
 
-        // 原子批量注入：按下+松开在一次 SendInput 中发出，中间不会插入用户按键
-        val events = ArrayList<WinUser.INPUT>(modifierVks.size * 2 + 2)
-        modifierVks.forEach { events.add(keyInput(it, 0)) }
-        events.add(keyInput(keyCode, 0))
-        events.add(keyInput(keyCode, KEYEVENTF_KEYUP))
-        modifierVks.reversed().forEach { events.add(keyInput(it, KEYEVENTF_KEYUP)) }
+        // 原子批量注入：按下+松开在一次 SendInput 中发出，中间不会插入用户按键。
+        // 注意：JNA 结构体数组必须用 toArray 分配连续内存，独立分配的元素会被 JNA 拒绝。
+        val seq = ArrayList<Pair<Int, Int>>(modifierVks.size * 2 + 2)
+        modifierVks.forEach { seq.add(it to 0) }
+        seq.add(keyCode to 0)
+        seq.add(keyCode to KEYEVENTF_KEYUP)
+        modifierVks.reversed().forEach { seq.add(it to KEYEVENTF_KEYUP) }
 
-        val sent = user32.SendInput(events.size, events.toTypedArray(), INPUT_SIZE)
+        val events = WinUser.INPUT().toArray(seq.size) as Array<WinUser.INPUT>
+        seq.forEachIndexed { i, (vk, flags) ->
+            val input = events[i]
+            input.type = DWORD(WinUser.INPUT.INPUT_KEYBOARD.toLong())
+            input.input.setType("ki")
+            val ki = WinUser.KEYBDINPUT()
+            ki.wVk = WORD(vk.toLong())
+            ki.wScan = WORD(0)
+            ki.dwFlags = DWORD(flags.toLong())
+            ki.time = DWORD(0)
+            ki.dwExtraInfo = BaseTSD.ULONG_PTR(0)
+            input.input.ki = ki
+        }
+
+        val sent = user32.SendInput(events.size, events, INPUT_SIZE)
         return sent == events.size
-    }
-
-    private fun keyInput(vk: Int, flags: Int): WinUser.INPUT {
-        val input = WinUser.INPUT()
-        input.type = DWORD(WinUser.INPUT.INPUT_KEYBOARD.toLong())
-        input.input.setType("ki")
-        val ki = WinUser.KEYBDINPUT()
-        ki.wVk = WORD(vk.toLong())
-        ki.wScan = WORD(0)
-        ki.dwFlags = DWORD(flags.toLong())
-        ki.time = DWORD(0)
-        ki.dwExtraInfo = BaseTSD.ULONG_PTR(0)
-        input.input.ki = ki
-        return input
     }
 
     private fun isKeyHeld(vk: Int): Boolean {

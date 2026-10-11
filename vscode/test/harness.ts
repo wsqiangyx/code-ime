@@ -100,12 +100,24 @@ async function main() {
     );
   }
 
-  // koffi 冒烟：加载 imm32/user32 并调用（前台窗口无 IME 上下文时 himc 为 null，属正常）
+  // koffi 冒烟：加载 user32 并验证原子 SendInput（无害键 F15，不切换输入法）
   try {
     const koffi = require('koffi');
     const u = koffi.load('user32.dll');
-    const gfw = u.func('void* __stdcall GetForegroundWindow()');
-    console.log(`KOFFI smoke: user32 loaded, hwnd=${gfw()}`);
+    const KI = koffi.struct('Harness_KEYBDINPUT', {
+      wVk: 'uint16', wScan: 'uint16', dwFlags: 'uint32', time: 'uint32', dwExtraInfo: 'uintptr_t',
+    });
+    const MI = koffi.struct('Harness_MOUSEINPUT', {
+      dx: 'int32', dy: 'int32', mouseData: 'uint32', dwFlags: 'uint32', time: 'uint32', dwExtraInfo: 'uintptr_t',
+    });
+    const U = koffi.union('Harness_INPUT_U', { ki: KI, mi: MI });
+    const INP = koffi.struct('Harness_INPUT', { type: 'uint32', u: U });
+    const send = u.func('uint32 __stdcall SendInput(uint32, Harness_INPUT*, int)');
+    const buf = koffi.alloc(INP, 2);
+    koffi.encode(buf, 0, INP, { type: 1, u: { ki: { wVk: 0x7e, wScan: 0, dwFlags: 0, time: 0, dwExtraInfo: 0 } } });
+    koffi.encode(buf, 1, INP, { type: 1, u: { ki: { wVk: 0x7e, wScan: 0, dwFlags: 2, time: 0, dwExtraInfo: 0 } } });
+    const sent = send(2, buf, koffi.sizeof(INP));
+    console.log(`KOFFI smoke: user32 loaded, SendInput(F15) sent=${sent} (期望 2)`);
   } catch (e) {
     console.log('KOFFI smoke failed:', e);
   }

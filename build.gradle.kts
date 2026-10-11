@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.1.6"
+version = "1.1.7"
 
 repositories {
     mavenCentral()
@@ -57,5 +57,12 @@ intellijPlatform {
 tasks.register<JavaExec>("immProbe") {
     group = "verification"
     mainClass = "com.codeime.tools.ImmProbeKt"
+    classpath = sourceSets["test"].runtimeClasspath
+}
+
+/** 独立验证 SendInput 原子注入（无害键 F15）：./gradlew sendInputProbe */
+tasks.register<JavaExec>("sendInputProbe") {
+    group = "verification"
+    mainClass = "com.codeime.tools.SendInputProbeKt"
     classpath = sourceSets["test"].runtimeClasspath
 }
