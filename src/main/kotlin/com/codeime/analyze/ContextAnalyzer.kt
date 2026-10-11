@@ -1,5 +1,6 @@
 package com.codeime.analyze
 
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
@@ -42,7 +43,9 @@ object ContextAnalyzer {
         }
 
         val offset = editor.caretModel.offset.coerceIn(0, document.textLength)
-        val caretLine = document.getLineNumber(offset)
+        // 用逻辑位置取光标行：光标停在空白行时偏移量与下一行起点重合，
+        // document.getLineNumber 会把光标行错算成下一行
+        val caretLine = editor.caretModel.logicalPosition.line.coerceIn(0, document.lineCount - 1)
         var leaf = psiFile.findElementAt(offset)
         if (leaf == null && offset > 0) {
             // 光标紧跟在最后一个字符之后（例如刚敲完一个字符，或行尾）
@@ -50,15 +53,20 @@ object ContextAnalyzer {
         }
         if (leaf == null) return EditorContext.UNKNOWN
         if (leaf is PsiWhiteSpace) {
-            // 回看：光标紧跟注释末尾（如块注释后的空格、注释行行尾）
-            val prevOffset = leaf.textRange.startOffset - 1
-            val prevLeaf = if (prevOffset >= 0) psiFile.findElementAt(prevOffset) else null
-            if (prevLeaf != null && prevLeaf !is PsiWhiteSpace && isInComment(prevLeaf)) {
-                return EditorContext.COMMENT
+            // 空白行本身不按注释处理（即使是注释的延续行）
+            if (isLineBlank(document, caretLine)) return EditorContext.CODE
+            // 回看：光标紧跟“同行”注释末尾（注释行行尾、块注释后的空格）。
+            // 注意用空白段前一个字符所在行判断：空白段起始于行边界时，
+            // getLineNumber 会把它归到下一行，导致 EOL 场景漏判。
+            val runStart = leaf.textRange.startOffset
+            if (runStart > 0 && document.getLineNumber(runStart - 1) == caretLine) {
+                val prevLeaf = psiFile.findElementAt(runStart - 1)
+                if (prevLeaf != null && prevLeaf !is PsiWhiteSpace && isInComment(prevLeaf)) {
+                    return EditorContext.COMMENT
+                }
             }
             // 前看：光标落在行首缩进或行内注释前的空隙时，看同行下一个非空白元素。
-            // 典型场景：方向键从代码行移到缩进更深的注释行，光标停在缩进空白里，
-            // 此时回看只能看到上一行的换行符（也是空白），必须向前看同行注释。
+            // 典型场景：方向键从代码行移到缩进更深的注释行，光标停在缩进空白里。
             val nextLeaf = psiFile.findElementAt(leaf.textRange.endOffset)
             if (nextLeaf != null && nextLeaf !is PsiWhiteSpace &&
                 document.getLineNumber(nextLeaf.textRange.startOffset) == caretLine
@@ -70,11 +78,13 @@ object ContextAnalyzer {
 
         if (isInComment(leaf)) return EditorContext.COMMENT
         if (isInString(leaf)) return EditorContext.STRING
-
-        // 行注释延续：光标位于空行、且上一行是 "//" 注释时，视为仍在注释中
-        if (onBlankLineBelowLineComment(editor, offset)) return EditorContext.COMMENT
-
         return EditorContext.CODE
+    }
+
+    private fun isLineBlank(document: Document, line: Int): Boolean {
+        val start = document.getLineStartOffset(line)
+        val text = document.getText(TextRange(start, document.getLineEndOffset(line)))
+        return text.isBlank()
     }
 
     private fun isInComment(element: PsiElement): Boolean {
@@ -111,16 +121,5 @@ object ContextAnalyzer {
             depth++
         }
         return false
-    }
-
-    private fun onBlankLineBelowLineComment(editor: Editor, offset: Int): Boolean {
-        val document = editor.document
-        val line = document.getLineNumber(offset)
-        if (line == 0) return false
-        val prevLineText = document.getText(
-            TextRange(document.getLineStartOffset(line - 1), document.getLineEndOffset(line - 1))
-        ).trimStart()
-        return prevLineText.startsWith("//") &&
-                document.getText(TextRange(document.getLineStartOffset(line), offset)).isBlank()
     }
 }

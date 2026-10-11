@@ -109,7 +109,7 @@ cd vscode && npm install && npm run package
 
 ## 工作原理
 
-1. **上下文检测**：监听所有编辑器的光标变化（50ms 防抖），通过 PSI 树判断光标是否位于 `PsiComment`（对所有语言通用）；PSI 解析滞后时用行内原始文本 `//` 兜底；空行且上一行为 `//` 注释时视为注释延续。
+1. **上下文检测**：监听所有编辑器的光标变化（50ms 防抖），通过 PSI 树判断光标是否位于 `PsiComment`（对所有语言通用）；PSI 解析滞后时用行内原始文本 `//` 兜底。**空白行一律按代码处理**（不切中文）；块注释内部的空行仍属注释。
 2. **状态检测**：通过 JNA 调用系统 `imm32.dll` 的 `ImmGetConversionStatus`，`IME_CMODE_NATIVE` 位 = 中文模式。
 3. **切换策略**：
    - 优先 `ImmSetConversionStatus` / `ImmSetOpenStatus` 直接设置，约 80ms 后回读校验；
