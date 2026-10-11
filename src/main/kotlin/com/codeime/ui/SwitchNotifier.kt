@@ -13,8 +13,12 @@ object SwitchNotifier {
 
     private var lastNotifyAt = 0L
 
-    fun notifyFailure(target: ImeMode, project: Project?) {
+    /**
+     * @param consecutiveFailures 连续失败次数；达到阈值才提醒，避免方向键移动时通知刷屏
+     */
+    fun notifyFailure(target: ImeMode, project: Project?, consecutiveFailures: Int) {
         if (!CodeImeSettings.getInstance().state.showFailureNotifications) return
+        if (consecutiveFailures < NOTIFY_THRESHOLD) return
         val now = System.currentTimeMillis()
         if (now - lastNotifyAt < THROTTLE_MS) return
         lastNotifyAt = now
@@ -24,8 +28,9 @@ object SwitchNotifier {
             .getNotificationGroup("CodeIME")
             .createNotification(
                 "CodeIME",
-                "无法自动切换到${targetText}。请确认设置中的模拟热键与系统输入法的中/英切换热键一致" +
-                    "（微软拼音默认为 Shift）。",
+                "连续 $consecutiveFailures 次无法自动切换到$targetText。请依次检查：" +
+                    "① 设置中的模拟热键是否与系统输入法的中/英切换热键一致（微软拼音默认为 Shift）；" +
+                    "② 若使用微软拼音，建议在设置中关闭「优先直接设置输入法状态」。",
                 NotificationType.WARNING
             )
         notification.addAction(
@@ -36,5 +41,6 @@ object SwitchNotifier {
         notification.notify(project)
     }
 
-    private const val THROTTLE_MS = 3000L
+    private const val NOTIFY_THRESHOLD = 3
+    private const val THROTTLE_MS = 10_000L
 }

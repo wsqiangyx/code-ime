@@ -40,6 +40,11 @@ class EditorCaretWatcher {
     }
     private var started = false
 
+    // 失败冷却：切换失败后短时间内不重试同一目标，避免反复模拟热键把输入法来回振荡
+    @Volatile private var lastFailedTarget: ImeMode? = null
+    @Volatile private var lastFailedAt = 0L
+    @Volatile private var consecutiveFailures = 0
+
     fun start() {
         if (started) return
         started = true
@@ -106,6 +111,8 @@ class EditorCaretWatcher {
         if (!app.isActive()) return
         if (editor.isDisposed) return
         if (editor.selectionModel.hasSelection()) return
+        // 设置弹窗等抢焦点时不切换，模拟按键只会打进别的界面
+        if (!editor.contentComponent.hasFocus()) return
         val settings = CodeImeSettings.getInstance().state
         if (!settings.enabled) return
 
@@ -129,17 +136,27 @@ class EditorCaretWatcher {
 
         val state = stateFor(editor)
         if (effective == state.lastContext) return // 同一上下文内移动，不动作
+
+        // 失败冷却：短时间内不对同一目标反复尝试
+        if (target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS) {
+            return
+        }
         state.lastContext = effective
 
         switchExecutor.execute {
             try {
                 val result = InputMethodManager.instance.switchTo(target)
                 if (result == SwitchResult.FAILED) {
+                    consecutiveFailures++
+                    lastFailedTarget = target
+                    lastFailedAt = System.currentTimeMillis()
                     ApplicationManager.getApplication().invokeLater {
-                        // 清除“已尝试”标记，让下一次光标事件重试，而不是卡在失败状态
+                        // 清除“已尝试”标记，让下一次光标事件在冷却结束后重试
                         editor.getUserData(STATE_KEY)?.lastContext = null
-                        SwitchNotifier.notifyFailure(target, project)
+                        SwitchNotifier.notifyFailure(target, project, consecutiveFailures)
                     }
+                } else {
+                    consecutiveFailures = 0
                 }
             } catch (t: Throwable) {
                 log.warn("CodeIME: 切换输入法时出现异常", t)
@@ -177,5 +194,6 @@ class EditorCaretWatcher {
         private val ATTACHED_LISTENER_KEY = Key.create<CaretListener>("CodeIME.caretListener")
         private val STATE_KEY = Key.create<EditorState>("CodeIME.editorState")
         private const val DEBOUNCE_MS = 50
+        private const val FAILURE_COOLDOWN_MS = 1500
     }
 }

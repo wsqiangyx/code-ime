@@ -20,8 +20,8 @@ class CodeImeSettings : PersistentStateComponent<CodeImeSettings.State> {
         /** 字符串内是否视为中文 */
         var stringAsChinese: Boolean = false
 
-        /** 优先用 IMM32 直接设置（失败自动降级为模拟热键） */
-        var useDirectImmSet: Boolean = true
+        /** 优先用 IMM32 直接设置（微软拼音建议关闭：关闭后优先模拟热键，更可靠） */
+        var useDirectImmSet: Boolean = false
 
         /** 模拟的中英切换热键（KeyEvent.VK_*，0 表示禁用模拟） */
         var hotkeyCode: Int = KeyEvent.VK_SHIFT

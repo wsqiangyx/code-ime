@@ -18,6 +18,11 @@ export function registerListeners(
   const lastContext = new WeakMap<vscode.TextEditor, EditorContext>();
   let lastNotifyAt = 0;
 
+  // 失败冷却：切换失败后短时间内不重试同一目标，避免反复模拟热键把输入法来回振荡
+  let lastFailedTarget: ImeMode | null = null;
+  let lastFailedAt = 0;
+  let consecutiveFailures = 0;
+
   const isSupported = (editor: vscode.TextEditor) =>
     SUPPORTED_SCHEMES.has(editor.document.uri.scheme);
 
@@ -56,7 +61,6 @@ export function registerListeners(
       }
 
       if (ctx === lastContext.get(editor)) return; // 同一上下文内移动，不动作
-      lastContext.set(editor, ctx);
 
       const target: ImeMode | null =
         ctx === 'comment'
@@ -70,17 +74,26 @@ export function registerListeners(
               : null;
       if (!target) return;
 
+      // 失败冷却：短时间内不对同一目标反复尝试
+      if (target === lastFailedTarget && Date.now() - lastFailedAt < 1500) return;
+      lastContext.set(editor, ctx);
+
       const result = await switchTo(target, cfg.toggleHotkey, cfg.useDirectImmSet);
       status.update(currentMode());
-      if (result === 'failed' && cfg.showFailureNotifications) {
-        const now = Date.now();
-        if (now - lastNotifyAt > 3000) {
-          lastNotifyAt = now;
+      if (result === 'failed') {
+        consecutiveFailures++;
+        lastFailedTarget = target;
+        lastFailedAt = Date.now();
+        if (cfg.showFailureNotifications && consecutiveFailures >= 3 && Date.now() - lastNotifyAt > 10000) {
+          lastNotifyAt = Date.now();
           void vscode.window.showWarningMessage(
-            'CodeIME：无法自动切换到' + (target === 'chinese' ? '中文' : '英文') +
-            '。请确认设置中的切换热键与系统输入法一致（微软拼音默认 Shift）。',
+            `CodeIME：连续 ${consecutiveFailures} 次无法自动切换到${target === 'chinese' ? '中文' : '英文'}。` +
+            '请检查设置中的切换热键是否与系统输入法一致（微软拼音默认 Shift）；' +
+            '若使用微软拼音，建议关闭「优先直接设置输入法状态」。',
           );
         }
+      } else {
+        consecutiveFailures = 0;
       }
     } finally {
       busy.delete(editor);

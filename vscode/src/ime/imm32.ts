@@ -9,6 +9,10 @@ const VK_SHIFT = 0x10;
 const VK_CONTROL = 0x11;
 const VK_SPACE = 0x20;
 
+// 轮询校验：总等待 ~420ms，容忍微软拼音经 TSF 应用新模式的滞后
+const VERIFY_POLL_COUNT = 6;
+const VERIFY_POLL_INTERVAL_MS = 70;
+
 let ready = false;
 // koffi 的 .d.ts 对 func() 参数有严格限制，这里统一放宽为 any（运行时 API 以字符串描述类型）
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -120,6 +124,18 @@ function parseHotkey(name: string): number[] {
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+/**
+ * 轮询式校验：微软拼音经 TSF 应用新模式可能滞后数百毫秒，
+ * 单次短延迟回读会误判（实际已切换却被判失败，进而反复模拟热键来回振荡）。
+ */
+async function verify(target: ImeMode): Promise<boolean> {
+  for (let i = 0; i < VERIFY_POLL_COUNT; i++) {
+    await sleep(VERIFY_POLL_INTERVAL_MS);
+    if (currentMode() === target) return true;
+  }
+  return false;
+}
+
 export async function switchTo(
   target: ImeMode,
   hotkeyName: string,
@@ -129,8 +145,7 @@ export async function switchTo(
   if (currentMode() === target) return 'noop';
 
   if (useDirect && directSet(target)) {
-    await sleep(80);
-    if (currentMode() === target) return 'direct';
+    if (await verify(target)) return 'direct';
   }
 
   const vks = parseHotkey(hotkeyName);
@@ -142,8 +157,7 @@ export async function switchTo(
       console.error('[CodeIME] 模拟热键失败:', e);
       return 'failed';
     }
-    await sleep(80);
-    if (currentMode() === target) return 'hotkey';
+    if (await verify(target)) return 'hotkey';
   }
   return 'failed';
 }

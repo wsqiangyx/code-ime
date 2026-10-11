@@ -34,7 +34,7 @@ code --install-extension code-ime-1.1.0.vsix
 |---|---|---|
 | `codeIME.enabled` | `true` | 启用自动切换 |
 | `codeIME.stringAsChinese` | `false` | 字符串内视为中文 |
-| `codeIME.useDirectImmSet` | `true` | 优先直接设置输入法状态（失败自动降级模拟热键） |
+| `codeIME.useDirectImmSet` | `false` | 优先直接设置输入法状态（关闭后优先模拟热键；微软拼音建议关闭） |
 | `codeIME.toggleHotkey` | `shift` | 模拟切换热键：`shift` / `ctrl+space` / `none`，需与系统输入法设置一致 |
 | `codeIME.onDeactivate` | `none` | VSCode 失焦时：不干预 / 切中文 / 切英文 |
 | `codeIME.showFailureNotifications` | `true` | 切换失败时提醒 |
@@ -71,4 +71,4 @@ npm run package        # 打包 VSIX
 
 ## 开源协议
 
-本项目以 **GPL-3.0** 协议开源，详见 [../LICENSE](../LICENSE)。
+本项目以 **GPL-3.0** 协议开源，详见 <https://gitee.com/wsqdz/code-ime/blob/master/LICENSE>。
