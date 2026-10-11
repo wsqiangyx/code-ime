@@ -12,10 +12,28 @@ const VK_SPACE = 0x20;
 // 轮询校验：总等待 ~240ms，容忍微软拼音经 TSF 应用新模式的滞后
 const VERIFY_POLL_COUNT = 4;
 const VERIFY_POLL_INTERVAL_MS = 60;
-// 两次模拟按键的最小间隔，避免构成过近的“双击”
-const HOTKEY_MIN_SPACING_MS = 250;
-// 模拟按键的按住时长，模拟人类节奏
-const HOTKEY_HOLD_MS = 40;
+// 两次注入的最小间隔：避开微软拼音的忽略窗口与 IDE 双击 Shift 窗口
+const HOTKEY_MIN_SPACING_MS = 800;
+
+// Win32 INPUT 结构（koffi 原子 SendInput 注入用）
+const KEYBDINPUT = koffi.struct('CodeIME_KEYBDINPUT', {
+  wVk: 'uint16',
+  wScan: 'uint16',
+  dwFlags: 'uint32',
+  time: 'uint32',
+  dwExtraInfo: 'uintptr_t',
+});
+const MOUSEINPUT = koffi.struct('CodeIME_MOUSEINPUT', {
+  dx: 'int32',
+  dy: 'int32',
+  mouseData: 'uint32',
+  dwFlags: 'uint32',
+  time: 'uint32',
+  dwExtraInfo: 'uintptr_t',
+});
+const INPUT_UNION = koffi.union('CodeIME_INPUT_U', { ki: KEYBDINPUT, mi: MOUSEINPUT });
+const INPUT = koffi.struct('CodeIME_INPUT', { type: 'uint32', u: INPUT_UNION });
+const INPUT_SIZE = koffi.sizeof(INPUT);
 
 let ready = false;
 // koffi 的 .d.ts 对 func() 参数有严格限制，这里统一放宽为 any（运行时 API 以字符串描述类型）
@@ -26,7 +44,8 @@ let ImmReleaseContextFn: any;
 let ImmGetConversionStatusFn: any;
 let ImmSetConversionStatusFn: any;
 let ImmSetOpenStatusFn: any;
-let keybdEventFn: any;
+let SendInputFn: any;
+let GetAsyncKeyStateFn: any;
 
 /**
  * 初始化原生绑定（仅 Windows）。与 IDEA 版相同的混合策略：
@@ -47,7 +66,8 @@ export function initIme(): boolean {
     );
     ImmSetConversionStatusFn = imm32.func('int __stdcall ImmSetConversionStatus(void*, uint32, uint32)');
     ImmSetOpenStatusFn = imm32.func('int __stdcall ImmSetOpenStatus(void*, int)');
-    keybdEventFn = user32.func('void __stdcall keybd_event(uint8, uint8, uint32, uintptr)');
+    SendInputFn = user32.func('uint32 __stdcall SendInput(uint32, CodeIME_INPUT*, int)');
+    GetAsyncKeyStateFn = user32.func('int16 __stdcall GetAsyncKeyState(int)');
     ready = true;
   } catch (e) {
     console.error('[CodeIME] 初始化 imm32 失败:', e);
@@ -142,16 +162,41 @@ async function verify(target: ImeMode): Promise<boolean> {
 
 let lastHotkeyAt = 0;
 
-/** 模拟一次中英切换热键（含最小间隔与按住时长的人类化节奏） */
-async function pressHotkey(vks: number[]): Promise<void> {
+function isKeyHeld(vk: number): boolean {
+  if (!GetAsyncKeyStateFn) return false;
+  return (GetAsyncKeyStateFn(vk) & 0x8000) !== 0;
+}
+
+/**
+ * 原子注入一次完整的中英切换热键：
+ * 按下+松开在一次 SendInput 中发出（用户按键不会插进按住窗口组合成其他快捷键），
+ * 注入前检查用户是否正物理按住相关键（Shift+方向键会扩展选区）。
+ */
+async function pressHotkey(key: number, mods: number[]): Promise<boolean> {
+  if (isKeyHeld(key) || mods.some(isKeyHeld)) return false;
   const sinceLast = Date.now() - lastHotkeyAt;
   if (sinceLast >= 0 && sinceLast < HOTKEY_MIN_SPACING_MS) {
     await sleep(HOTKEY_MIN_SPACING_MS - sinceLast);
   }
+  // 等待期间用户可能按下，注入前再确认一次
+  if (isKeyHeld(key) || mods.some(isKeyHeld)) return false;
   lastHotkeyAt = Date.now();
-  for (const vk of vks) keybdEventFn(vk, 0, 0, 0);
-  await sleep(HOTKEY_HOLD_MS);
-  for (const vk of [...vks].reverse()) keybdEventFn(vk, 0, KEYEVENTF_KEYUP, 0);
+
+  const seq: { vk: number; flags: number }[] = [];
+  mods.forEach(vk => seq.push({ vk, flags: 0 }));
+  seq.push({ vk: key, flags: 0 });
+  seq.push({ vk: key, flags: KEYEVENTF_KEYUP });
+  [...mods].reverse().forEach(vk => seq.push({ vk, flags: KEYEVENTF_KEYUP }));
+
+  const buf = koffi.alloc(INPUT, seq.length);
+  seq.forEach((ev, i) => {
+    koffi.encode(buf, i * INPUT_SIZE, INPUT, {
+      type: 1,
+      u: { ki: { wVk: ev.vk, wScan: 0, dwFlags: ev.flags, time: 0, dwExtraInfo: 0 } },
+    });
+  });
+  const sent = SendInputFn(seq.length, buf, INPUT_SIZE);
+  return sent === seq.length;
 }
 
 export async function switchTo(
@@ -167,19 +212,16 @@ export async function switchTo(
   }
 
   // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换。
-  // 先立即按；被忽略再以递增间隔重试。
+  // 重试间隔 ≥800ms 也避开了双击 Shift 误触全局搜索的判定窗口。
   const vks = parseHotkey(hotkeyName);
-  const retryWaits = [0, 1200, 2400];
+  const retryWaits = [0, 800, 2000];
   if (vks.length) {
+    const key = vks[vks.length - 1];
+    const mods = vks.slice(0, -1);
     for (let attempt = 0; attempt < retryWaits.length; attempt++) {
       await sleep(retryWaits[attempt]);
-      try {
-        await pressHotkey(vks);
-      } catch (e) {
-        console.error('[CodeIME] 模拟热键失败:', e);
-        return 'failed';
-      }
-      if (await verify(target)) return 'hotkey';
+      const pressed = await pressHotkey(key, mods);
+      if (pressed && (await verify(target))) return 'hotkey';
     }
   }
   return 'failed';

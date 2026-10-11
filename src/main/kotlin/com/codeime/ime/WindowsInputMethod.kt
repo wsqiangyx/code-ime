@@ -4,10 +4,13 @@ import com.codeime.settings.CodeImeSettings
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.util.SystemInfo
 import com.sun.jna.Pointer
+import com.sun.jna.platform.win32.BaseTSD
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef.HWND
+import com.sun.jna.platform.win32.WinDef.WORD
+import com.sun.jna.platform.win32.WinDef.DWORD
+import com.sun.jna.platform.win32.WinUser
 import com.sun.jna.ptr.IntByReference
-import java.awt.Robot
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.util.concurrent.CountDownLatch
@@ -26,15 +29,6 @@ import javax.swing.SwingUtilities
 class WindowsInputMethod : InputMethodController {
 
     private val log = Logger.getInstance("CodeIME.Diag")
-    private val robot: Robot? by lazy {
-        try {
-            Robot()
-        } catch (t: Throwable) {
-            log.warn("CodeIME: Robot 不可用，热键模拟降级关闭", t)
-            null
-        }
-    }
-    private val robotLock = Any()
     private var lastHotkeyAt = 0L
 
     override fun name() = "Windows IMM32"
@@ -57,15 +51,15 @@ class WindowsInputMethod : InputMethodController {
             if (directOk && verifyOnEdt(target)) return SwitchResult.DIRECT
         }
 
-        // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换。
-        // 先立即按（多数场景距上次按键已较远，~100ms 内生效）；被忽略再以递增间隔重试。
-        val retryWaits = longArrayOf(0L, 1200L, 2400L)
+        // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换，
+        // 重试间隔 ≥800ms 也避开了 IDE「双击 Shift 全局搜索」的判定窗口。
+        val retryWaits = longArrayOf(0L, 800L, 2000L)
         var attempt = 0
         while (attempt < retryWaits.size && settings.hotkeyCode != 0) {
             sleepQuietly(retryWaits[attempt])
-            if (!pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)) break
-            log.debug("hotkey pressed attempt=$attempt code=${settings.hotkeyCode} mods=${settings.hotkeyModifiers}")
-            if (verifyOnEdt(target)) return SwitchResult.HOTKEY
+            val pressed = pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)
+            log.debug("hotkey pressed attempt=$attempt ok=$pressed")
+            if (pressed && verifyOnEdt(target)) return SwitchResult.HOTKEY
             attempt++
         }
 
@@ -146,29 +140,55 @@ class WindowsInputMethod : InputMethodController {
     }
 
     private fun pressHotkey(keyCode: Int, modifiers: Int): Boolean {
-        val r = robot ?: return false
-        // 避免与上一次按键构成过近的“双击”：保证最小按键间隔
-        val sinceLast = System.currentTimeMillis() - lastHotkeyAt
-        if (sinceLast in 0 until HOTKEY_MIN_SPACING_MS) {
-            sleepQuietly(HOTKEY_MIN_SPACING_MS - sinceLast)
-        }
-        lastHotkeyAt = System.currentTimeMillis()
+        val user32 = User32Ex.INSTANCE ?: return false
 
-        val modifierKeys = listOf(
+        // 用户正物理按住相关键时不注入：Shift+方向键会扩展选区、
+        // 与手动 Shift 叠加会触发 IDE 的双击 Shift 全局搜索
+        val modifierVks = listOf(
             InputEvent.CTRL_DOWN_MASK to KeyEvent.VK_CONTROL,
             InputEvent.ALT_DOWN_MASK to KeyEvent.VK_ALT,
             InputEvent.SHIFT_DOWN_MASK to KeyEvent.VK_SHIFT,
             InputEvent.META_DOWN_MASK to KeyEvent.VK_META,
         ).filter { modifiers and it.first != 0 }.map { it.second }
+        if (isKeyHeld(keyCode) || modifierVks.any { isKeyHeld(it) }) return false
 
-        synchronized(robotLock) {
-            modifierKeys.forEach { r.keyPress(it) }
-            r.keyPress(keyCode)
-            sleepQuietly(HOTKEY_HOLD_MS) // 保持一小段按住时长，模拟人类按键节奏
-            r.keyRelease(keyCode)
-            modifierKeys.reversed().forEach { r.keyRelease(it) }
+        // 两次注入保持最小间隔：避开微软拼音的忽略窗口与 IDE 双击 Shift 窗口
+        val sinceLast = System.currentTimeMillis() - lastHotkeyAt
+        if (sinceLast in 0 until HOTKEY_MIN_SPACING_MS) {
+            sleepQuietly(HOTKEY_MIN_SPACING_MS - sinceLast)
         }
-        return true
+        // 等待期间用户可能按下，注入前再确认一次
+        if (isKeyHeld(keyCode) || modifierVks.any { isKeyHeld(it) }) return false
+        lastHotkeyAt = System.currentTimeMillis()
+
+        // 原子批量注入：按下+松开在一次 SendInput 中发出，中间不会插入用户按键
+        val events = ArrayList<WinUser.INPUT>(modifierVks.size * 2 + 2)
+        modifierVks.forEach { events.add(keyInput(it, 0)) }
+        events.add(keyInput(keyCode, 0))
+        events.add(keyInput(keyCode, KEYEVENTF_KEYUP))
+        modifierVks.reversed().forEach { events.add(keyInput(it, KEYEVENTF_KEYUP)) }
+
+        val sent = user32.SendInput(events.size, events.toTypedArray(), INPUT_SIZE)
+        return sent == events.size
+    }
+
+    private fun keyInput(vk: Int, flags: Int): WinUser.INPUT {
+        val input = WinUser.INPUT()
+        input.type = DWORD(WinUser.INPUT.INPUT_KEYBOARD.toLong())
+        input.input.setType("ki")
+        val ki = WinUser.KEYBDINPUT()
+        ki.wVk = WORD(vk.toLong())
+        ki.wScan = WORD(0)
+        ki.dwFlags = DWORD(flags.toLong())
+        ki.time = DWORD(0)
+        ki.dwExtraInfo = BaseTSD.ULONG_PTR(0)
+        input.input.ki = ki
+        return input
+    }
+
+    private fun isKeyHeld(vk: Int): Boolean {
+        val user32 = User32Ex.INSTANCE ?: return false
+        return (user32.GetAsyncKeyState(vk).toInt() and 0x8000) != 0
     }
 
     private fun sleepQuietly(millis: Long) {
@@ -183,10 +203,10 @@ class WindowsInputMethod : InputMethodController {
         private const val VERIFY_POLL_COUNT = 4
         private const val VERIFY_POLL_INTERVAL_MS = 60L
 
-        /** 两次模拟按键的最小间隔，避免构成过近的“双击” */
-        private const val HOTKEY_MIN_SPACING_MS = 250L
+        /** 两次注入的最小间隔：避开微软拼音的忽略窗口与 IDE 双击 Shift 窗口 */
+        private const val HOTKEY_MIN_SPACING_MS = 800L
 
-        /** 模拟按键的按住时长，模拟人类节奏 */
-        private const val HOTKEY_HOLD_MS = 40L
+        private const val KEYEVENTF_KEYUP = 0x0002
+        private val INPUT_SIZE = WinUser.INPUT().size()
     }
 }
