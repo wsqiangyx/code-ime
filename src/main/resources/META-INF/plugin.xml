@@ -1,0 +1,31 @@
+<idea-plugin>
+    <id>com.codeime</id>
+    <name>CodeIME</name>
+    <vendor>CodeIME Project</vendor>
+    <description><![CDATA[
+    <p>根据光标上下文自动切换输入法：注释内自动切中文，代码内自动切英文，无需手动按 Shift。</p>
+    <p>当前支持 Windows 10/11 + 微软拼音（兼容其他遵循 IMM32 标准的输入法）。</p>
+    <ul>
+        <li>注释（// 与 /* */、Javadoc）：中文</li>
+        <li>代码：英文</li>
+        <li>字符串：默认不干预（可在设置中改为中文）</li>
+        <li>选中文本、IDE 失焦、控制台等场景不切换，避免误触</li>
+    </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <applicationListeners>
+        <listener class="com.codeime.listener.AppLifecycleWatcher" topic="com.intellij.ide.AppLifecycleListener"/>
+        <listener class="com.codeime.listener.AppActivationWatcher" topic="com.intellij.ide.ApplicationActivationListener"/>
+    </applicationListeners>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.codeime.settings.CodeImeSettings"/>
+        <applicationService serviceImplementation="com.codeime.listener.EditorCaretWatcher"/>
+        <applicationConfigurable id="com.codeime.settings" parentId="tools"
+                                 displayName="CodeIME 输入法自动切换"
+                                 instance="com.codeime.settings.CodeImeConfigurable"/>
+        <notificationGroup id="CodeIME" displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>

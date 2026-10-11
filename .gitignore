@@ -1,0 +1,12 @@
+.gradle/
+build/
+out/
+.intellijPlatform/
+*.iml
+.idea/
+
+# VSCode 扩展
+vscode/node_modules/
+vscode/dist/
+vscode/test-dist/
+vscode/*.vsix

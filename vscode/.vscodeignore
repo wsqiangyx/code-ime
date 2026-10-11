@@ -1,0 +1,13 @@
+src/**
+test/**
+test-dist/**
+node_modules/.bin/**
+node_modules/@types/**
+node_modules/typescript/**
+node_modules/esbuild/**
+node_modules/vscode-textmate/**
+node_modules/vscode-oniguruma/**
+esbuild.mjs
+tsconfig.json
+**/*.ts
+**/*.map

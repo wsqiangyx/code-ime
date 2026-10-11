@@ -1,0 +1,97 @@
+{
+  "name": "code-ime",
+  "displayName": "CodeIME 输入法自动切换",
+  "description": "光标在注释中自动切换中文输入法，在代码中自动切换英文（Windows + 微软拼音）",
+  "version": "1.1.0",
+  "publisher": "codeime",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeIME.toggleEnabled",
+        "title": "CodeIME: 启用/禁用自动切换"
+      }
+    ],
+    "configuration": {
+      "title": "CodeIME 输入法自动切换",
+      "properties": {
+        "codeIME.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用自动切换（注释中文 / 代码英文）"
+        },
+        "codeIME.stringAsChinese": {
+          "type": "boolean",
+          "default": false,
+          "description": "字符串内视为中文（默认不干预）"
+        },
+        "codeIME.useDirectImmSet": {
+          "type": "boolean",
+          "default": true,
+          "description": "优先直接设置输入法状态（失败时自动降级为模拟热键）"
+        },
+        "codeIME.toggleHotkey": {
+          "type": "string",
+          "enum": [
+            "shift",
+            "ctrl+space",
+            "none"
+          ],
+          "default": "shift",
+          "description": "中英切换模拟热键（需与系统输入法的中/英切换热键一致，微软拼音默认 Shift）"
+        },
+        "codeIME.onDeactivate": {
+          "type": "string",
+          "enum": [
+            "none",
+            "chinese",
+            "english"
+          ],
+          "enumDescriptions": [
+            "不干预",
+            "切换到中文",
+            "切换到英文"
+          ],
+          "default": "none",
+          "description": "VSCode 失去焦点时"
+        },
+        "codeIME.showFailureNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "切换失败时弹出提醒"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "check": "tsc --noEmit",
+    "test": "node esbuild.mjs && node test-dist/harness.cjs",
+    "package": "node esbuild.mjs && npx vsce package --allow-missing-repository"
+  },
+  "dependencies": {
+    "koffi": "^3.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9.3",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "koffi@3.3.3": true
+  }
+}
