@@ -120,7 +120,7 @@ class EditorCaretWatcher {
     private fun evaluate(project: com.intellij.openapi.project.Project, editor: Editor) {
         val app = ApplicationManager.getApplication() ?: return
         if (!app.isActive()) { log.debug("evaluate skip: app inactive"); return }
-        if (editor.isDisposed) return
+        if (editor.isDisposed) { log.debug("evaluate skip: editor disposed"); return }
         if (editor.selectionModel.hasSelection()) { log.debug("evaluate skip: selection"); return }
         // 设置弹窗等抢焦点时不切换，模拟按键只会打进别的界面
         if (!editor.contentComponent.hasFocus()) { log.debug("evaluate skip: no focus"); return }
@@ -143,14 +143,14 @@ class EditorCaretWatcher {
             EditorContext.STRING -> if (settings.stringAsChinese) ImeMode.CHINESE else null
             EditorContext.CODE -> ImeMode.ENGLISH
             EditorContext.UNKNOWN -> null
-        } ?: return
-
+        }
         val state = stateFor(editor)
         log.debug(
             "evaluate: offset=${editor.caretModel.offset} ctx=$context effective=$effective " +
-                "target=$target last=${state.lastContext} " +
-                "cooldown=${target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS}"
+                "target=${target ?: "NONE(不干预)"} last=${state.lastContext} " +
+                "cooldown=${target != null && target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS}"
         )
+        if (target == null) return
         if (effective == state.lastContext) return // 同一上下文内移动，不动作
 
         // 失败冷却：短时间内不对同一目标反复尝试

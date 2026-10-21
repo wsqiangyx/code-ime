@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.1.7"
+version = "1.2.0"
 
 repositories {
     mavenCentral()
@@ -50,6 +50,14 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = "261"
         }
+    }
+
+    publishing {
+        // 令牌从 ~/.gradle/gradle.properties（intellijPublishToken=...）
+        // 或环境变量 INTELLIJ_PUBLISH_TOKEN 读取，勿提交到仓库
+        token = providers.gradleProperty("intellijPublishToken")
+            .orElse(providers.environmentVariable("INTELLIJ_PUBLISH_TOKEN"))
+            .orElse("")
     }
 }
 

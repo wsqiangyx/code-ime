@@ -77,8 +77,33 @@ object ContextAnalyzer {
         }
 
         if (isInComment(leaf)) return EditorContext.COMMENT
-        if (isInString(leaf)) return EditorContext.STRING
+        if (isInString(leaf)) {
+            // Python docstring（三引号字符串）语义上是注释/文档，按注释处理
+            if (psiFile.language.id == "Python" && isTripleQuoted(leaf)) {
+                return EditorContext.COMMENT
+            }
+            return EditorContext.STRING
+        }
         return EditorContext.CODE
+    }
+
+    /** 元素或其近祖是否为三引号字符串（Python docstring 形态） */
+    private fun isTripleQuoted(element: PsiElement): Boolean {
+        var e: PsiElement? = element
+        var depth = 0
+        while (e != null && depth < 6) {
+            val t = e.text
+            if (t != null && t.length >= 3) {
+                // 剥掉可能的字符串前缀（r/f/b/u 组合）再判断三引号
+                val stripped = t.trimStart('r', 'R', 'b', 'B', 'f', 'F', 'u', 'U')
+                if (stripped.startsWith("\"\"\"") || stripped.startsWith("'''")) {
+                    return true
+                }
+            }
+            e = e.parent
+            depth++
+        }
+        return false
     }
 
     private fun isLineBlank(document: Document, line: Int): Boolean {
