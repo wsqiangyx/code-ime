@@ -3,14 +3,17 @@
     <name>CodeIME</name>
     <vendor>CodeIME Project</vendor>
     <description><![CDATA[
-    <p>根据光标上下文自动切换输入法：注释内自动切中文，代码内自动切英文，无需手动按 Shift。</p>
-    <p>当前支持 Windows 10/11 + 微软拼音（兼容其他遵循 IMM32 标准的输入法）。</p>
+    <p><b>CodeIME</b> switches your input method automatically: <b>Chinese inside comments and docstrings, English in code</b> — no more manual Shift-toggling between writing comments and writing code.</p>
+    <p>根据光标上下文自动切换输入法：注释与 docstring 内自动切中文，代码内自动切英文，无需手动按 Shift。</p>
     <ul>
-        <li>注释（// 与 /* */、Javadoc）：中文</li>
-        <li>代码：英文</li>
-        <li>字符串：默认不干预（可在设置中改为中文）</li>
-        <li>选中文本、IDE 失焦、控制台等场景不切换，避免误触</li>
+        <li>Comments &amp; Python docstrings → Chinese / 注释与 docstring → 中文</li>
+        <li>Code → English / 代码 → 英文</li>
+        <li>Works with all languages that have a PSI parser（支持所有可解析的语言）</li>
+        <li>No switching during selection drag or when the IDE is unfocused / 选中拖拽、IDE 失焦不误切</li>
+        <li>Configurable toggle hotkey with atomic keystroke injection / 中英切换热键可配置，原子注入防误触</li>
     </ul>
+    <p><b>Requirements:</b> Windows 10/11 + Microsoft Pinyin（微软拼音）. IntelliJ Platform 2026.1+.</p>
+    <p>Source code: <a href="https://github.com/wsqiangyx/code-ime">github.com/wsqiangyx/code-ime</a> (GPL-3.0)</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
