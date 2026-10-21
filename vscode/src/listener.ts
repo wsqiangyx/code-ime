@@ -6,7 +6,7 @@ import { currentMode, switchTo, type ImeMode } from './ime/imm32';
 import type { StatusBarController } from './status';
 
 const DEBOUNCE_MS = 30;
-const SUPPORTED_SCHEMES = new Set(['file', 'untitled', 'git', 'vscode-scm']);
+const SUPPORTED_SCHEMES = new Set(['file', 'untitled', 'git', 'vscode-scm', 'vscode-remote']);
 
 export function registerListeners(
   context: vscode.ExtensionContext,

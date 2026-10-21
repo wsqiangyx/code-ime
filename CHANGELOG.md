@@ -3,6 +3,15 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-10-21
+
+### Added
+- IDEA: status bar widget showing the current IME mode (中/英); click toggles auto switching.
+- IDEA: re-evaluate on editor tab switch (no caret event fires when switching tabs — the input method now follows the newly focused editor immediately).
+- IDEA: re-evaluate after a drag/Shift selection is cleared.
+- IDEA: best-effort detection of VCS commit-message editors (treated as Chinese).
+- VS Code: support Remote-SSH/WSL/Dev Container windows (`vscode-remote` scheme).
+
 ## [1.2.0] - 2026-10-13
 
 ### Added

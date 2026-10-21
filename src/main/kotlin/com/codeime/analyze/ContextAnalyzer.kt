@@ -36,9 +36,14 @@ object ContextAnalyzer {
         val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document)
             ?: return EditorContext.UNKNOWN
 
-        // Git 提交信息编辑器（IDEA 作为 GIT_EDITOR 打开 COMMIT_EDITMSG 时）：整体按注释对待
+        // Git 提交信息编辑器：整体按注释对待（中文）
         val virtualFile = psiFile.virtualFile
         if (virtualFile != null && virtualFile.name == "COMMIT_EDITMSG") {
+            return EditorContext.COMMENT
+        }
+        // IDE 内置 VCS 提交对话框（尽力识别：提交消息相关文件类型）
+        val fileTypeName = psiFile.fileType.name
+        if (fileTypeName.contains("Commit", ignoreCase = true)) {
             return EditorContext.COMMENT
         }
 

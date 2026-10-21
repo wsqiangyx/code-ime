@@ -6,7 +6,7 @@ import { TmRegistry } from '../src/tm/registry';
 import { ImeAnalyzer } from '../src/tm/analyzer';
 
 const VSCODE_EXTENSIONS =
-  process.env.VSCODE_EXTENSIONS ?? 'D:/software/VSCode/88e44fa0e0/resources/app/extensions';
+  process.env.VSCODE_EXTENSIONS ?? 'D:/software/VSCode/6d62b1d5da/resources/app/extensions';
 
 interface Case {
   lang: string;

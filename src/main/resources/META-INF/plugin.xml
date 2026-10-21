@@ -30,5 +30,11 @@
                                  displayName="CodeIME 输入法自动切换"
                                  instance="com.codeime.settings.CodeImeConfigurable"/>
         <notificationGroup id="CodeIME" displayType="BALLOON"/>
+        <statusBarWidgetFactory id="CodeIME.Widget" implementation="com.codeime.ui.CodeImeWidgetFactory"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="com.codeime.listener.EditorTabWatcher"
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    </projectListeners>
 </idea-plugin>

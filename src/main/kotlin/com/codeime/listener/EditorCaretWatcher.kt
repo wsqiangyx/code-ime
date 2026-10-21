@@ -75,12 +75,22 @@ class EditorCaretWatcher {
             }
         }
         editor.caretModel.addCaretListener(listener)
-        ATTACHED_LISTENER_KEY.set(editor, listener)
+        // 拖拽/Shift 选区结束（选区清空）时光标没有移动事件，补一次判定
+        val selectionListener = object : com.intellij.openapi.editor.event.SelectionListener {
+            override fun selectionChanged(e: com.intellij.openapi.editor.event.SelectionEvent) {
+                if (!editor.selectionModel.hasSelection()) {
+                    onCaretChanged(editor)
+                }
+            }
+        }
+        editor.selectionModel.addSelectionListener(selectionListener)
+        ATTACHED_LISTENER_KEY.set(editor, Pair(listener, selectionListener))
     }
 
     private fun detach(editor: Editor) {
-        val listener = editor.getUserData(ATTACHED_LISTENER_KEY) ?: return
-        editor.caretModel.removeCaretListener(listener)
+        val listeners = editor.getUserData(ATTACHED_LISTENER_KEY) ?: return
+        editor.caretModel.removeCaretListener(listeners.first)
+        editor.selectionModel.removeSelectionListener(listeners.second)
         editor.getUserData(STATE_KEY)?.timer?.stop()
         editor.putUserData(ATTACHED_LISTENER_KEY, null)
     }
@@ -95,6 +105,15 @@ class EditorCaretWatcher {
                 } ?: return@invokeLater
             val project = editor.project ?: return@invokeLater
             evaluate(project, editor)
+        }
+    }
+
+    /** 编辑器标签页切换后按新编辑器光标位置重新判定（绕过防抖） */
+    fun resyncEditor(editor: Editor) {
+        if (editor.isDisposed) return
+        val project = editor.project ?: return
+        ApplicationManager.getApplication().invokeLater {
+            if (!editor.isDisposed) evaluate(project, editor)
         }
     }
 
@@ -213,7 +232,8 @@ class EditorCaretWatcher {
 
     companion object {
         private val ATTACHED_KEY = Key.create<Boolean>("CodeIME.attached")
-        private val ATTACHED_LISTENER_KEY = Key.create<CaretListener>("CodeIME.caretListener")
+        private val ATTACHED_LISTENER_KEY =
+            Key.create<Pair<CaretListener, com.intellij.openapi.editor.event.SelectionListener>>("CodeIME.caretListener")
         private val STATE_KEY = Key.create<EditorState>("CodeIME.editorState")
         private const val DEBOUNCE_MS = 30
         private const val FAILURE_COOLDOWN_MS = 1500
