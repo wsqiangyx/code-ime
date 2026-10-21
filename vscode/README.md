@@ -71,4 +71,4 @@ npm run package        # 打包 VSIX
 
 ## 开源协议
 
-本项目以 **GPL-3.0** 协议开源，详见 <https://gitee.com/wsqdz/code-ime/blob/master/LICENSE>。
+本项目以 **GPL-3.0** 协议开源，详见 <https://github.com/wsqiangyx/code-ime/blob/master/LICENSE>。

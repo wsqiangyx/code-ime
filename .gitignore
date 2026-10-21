@@ -5,6 +5,9 @@ out/
 *.iml
 .idea/
 
+# 本机构建工具（Gradle 发行包等，体积大且与源码无关）
+.tools/
+
 # VSCode 扩展
 vscode/node_modules/
 vscode/dist/
