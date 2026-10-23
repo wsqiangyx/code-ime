@@ -3,6 +3,32 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.5] - 2026-10-23
+
+### Fixed
+- **Switching never fired on newer IntelliJ platforms (PyCharm 2026.x).** Three independent guards
+  each blocked every switch:
+  1. `editor.contentComponent.hasFocus()` is permanently `false` under the Compose/Skiko renderer —
+     replaced with an application-active + focused-window (non-dialog) + same-document check.
+  2. `FileEditorManager.selectedTextEditor` can be a *different instance* for the same document,
+     so identity comparison rejected the active editor — now compared by `Document`.
+  3. When the window has no IMM32 context (e.g. a fullscreen game or a TSF-based editor),
+     `ImmGetContext` returns null; the old code assumed "English", so it sent Shift on every event
+     and oscillated. Now a null context is treated as *unknown*, the plugin tracks an assumed mode
+     from its own last switch, and sends the hotkey only when the target actually differs.
+- Console editors are explicitly skipped; `coerceIn` range crash on zero-line documents fixed.
+- `lastSwitchAt` initialised to "now" instead of 0 (the epoch value made every mode change look like
+  a manual user toggle, disabling auto switching for 60 s).
+
+## [1.4.3] - 2026-10-23
+
+### Fixed
+- **Plugin silently stopped working after a marketplace hot-update.** Plugins installed/updated at
+  runtime are dynamically loaded, which never fires `AppLifecycleListener.appFrameCreated` — the caret
+  watcher and mode poller were only started there, so a hot-updated CodeIME never attached to editors.
+  Both services now start themselves on construction (the lifecycle callback remains as an idempotent
+  fallback), and editors that already carried a stale attach marker are re-attached.
+
 ## [1.4.2] - 2026-10-23
 
 ### Fixed

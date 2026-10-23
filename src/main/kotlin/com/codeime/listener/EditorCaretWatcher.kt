@@ -49,6 +49,14 @@ class EditorCaretWatcher {
     // 切换请求代次：方向键快速连穿多个上下文时，只执行最后一次的切换请求
     private val switchGeneration = AtomicLong(0)
 
+    init {
+        // 在服务初始化时自启动：插件被动态加载（市场热更新）时不会触发
+        // AppLifecycleListener.appFrameCreated，只依赖它会导致监听器永远不启动。
+        ApplicationManager.getApplication()?.let { app ->
+            if (!app.isDisposed) app.invokeLater { start() }
+        }
+    }
+
     fun start() {
         if (started) return
         started = true
@@ -64,6 +72,12 @@ class EditorCaretWatcher {
         }, appDisposable())
         // 启动前已打开的编辑器
         factory.allEditors.forEach { attach(it) }
+        // 动态加载前已存在的编辑器可能残留旧的 ATTACHED 标记（userData 跨版本共享），
+        // 此时需要强制重新挂载
+        factory.allEditors.forEach { editor ->
+            editor.putUserData(ATTACHED_KEY, null)
+            attach(editor)
+        }
     }
 
     fun attach(editor: Editor) {
@@ -135,6 +149,58 @@ class EditorCaretWatcher {
         log.debug("user override recorded: mode=$mode ctx=${state.lastContext}")
     }
 
+    /**
+     * 编辑器是否处于可切换的焦点语境。
+     * 不用 contentComponent.hasFocus()：PyCharm 2026.x 的 Compose/Skiko 渲染下恒为 false。
+     */
+    private fun isEditorContextFocused(
+        project: com.intellij.openapi.project.Project,
+        editor: Editor,
+    ): Boolean {
+        val app = ApplicationManager.getApplication() ?: return false
+        if (!app.isActive()) return false
+
+        // 1) 必须是当前选中的文件：后台标签页/工具窗口里的编辑器不应触发切换。
+        // 注意用文件比较而非编辑器对象同一性——PyCharm 2026.x 中 selectedTextEditor
+        // 可能返回与监听器持有的不同实例，对象比较会把一切拦死。
+        val selected = com.intellij.openapi.fileEditor.FileEditorManager
+            .getInstance(project).selectedTextEditor
+        if (selected != null && selected !== editor) {
+            val selectedFile = selected.document
+            if (selectedFile !== editor.document) {
+                log.debug("focus check: not selected file (${editor.document.hashCode()})")
+                return false
+            }
+        }
+
+        // 2) 当前焦点必须在 IDE 的普通窗口上（对话框/弹窗抢焦点时跳过，避免模拟按键打进对话框）
+        val focused = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().focusedWindow
+        if (focused == null) {
+            log.debug("focus check: focusedWindow=null")
+            return false
+        }
+        if (!focused.isShowing) {
+            log.debug("focus check: not showing (${focused.javaClass.simpleName})")
+            return false
+        }
+        if (isDialog(focused)) {
+            log.debug("focus check: dialog focused (${focused.javaClass.simpleName})")
+            return false
+        }
+        return true
+    }
+
+    private fun isDialog(window: java.awt.Window): Boolean {
+        var w: java.awt.Window? = window
+        var depth = 0
+        while (w != null && depth < 6) {
+            if (w is java.awt.Dialog) return true
+            w = w.owner
+            depth++
+        }
+        return false
+    }
+
     private fun onCaretChanged(editor: Editor) {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
@@ -164,8 +230,11 @@ class EditorCaretWatcher {
             return
         }
         if (editor.selectionModel.hasSelection()) { log.debug("evaluate skip: selection"); return }
-        // 设置弹窗等抢焦点时不切换，模拟按键只会打进别的界面
-        if (!editor.contentComponent.hasFocus()) { log.debug("evaluate skip: no focus"); return }
+        // 设置弹窗/对话框抢焦点时不切换，避免模拟按键打进别的界面。
+        // 注意：不能用 editor.contentComponent.hasFocus()——在 PyCharm 2026.x 的
+        // Compose/Skiko 渲染架构下它恒为 false，会把所有切换拦死（1.4.3 及更早的真实故障）。
+        // 改为判断：IDE 处于激活状态 + 当前焦点窗口属于本应用 + 该编辑器所在文件是当前选中文件。
+        if (!isEditorContextFocused(project, editor)) { log.debug("evaluate skip: no focus"); return }
         val settings = CodeImeSettings.getInstance().state
         if (!settings.enabled) { log.debug("evaluate skip: disabled"); return }
 

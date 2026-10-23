@@ -18,8 +18,18 @@ class ImeModePoller {
     private val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, appDisposable())
     private var lastKnown: ImeMode? = null
     private var initialized = false
+    private var started = false
+
+    init {
+        // 同 EditorCaretWatcher：插件动态加载时不触发 appFrameCreated，需在构造时自启动
+        ApplicationManager.getApplication()?.let { app ->
+            if (!app.isDisposed) app.invokeLater { start() }
+        }
+    }
 
     fun start() {
+        if (started) return
+        started = true
         schedule()
     }
 

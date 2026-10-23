@@ -161,8 +161,9 @@ async function verify(target: ImeMode): Promise<boolean> {
 }
 
 let lastHotkeyAt = 0;
-// 插件最近一次注入/直接设置的时间戳，用于把模式变化归因给插件或用户
-let lastSwitchAt = 0;
+// 插件最近一次注入/直接设置的时间戳，用于把模式变化归因给插件或用户。
+// 初始化为当前时刻，否则 (Date.now() - 0) 巨大，首次变化会被误判为用户手动切换
+let lastSwitchAt = Date.now();
 
 /** 插件最近一次切换尝试的时间戳（手动切换跟手机制的归因依据） */
 export function lastPluginSwitchAt(): number {
