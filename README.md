@@ -47,7 +47,16 @@ code --install-extension vscode/code-ime-<version>.vsix
 
 ## Building from source
 
-Prerequisites: JDK 21 for the IDE plugin (Gradle provisions the toolchain automatically, or point `org.gradle.java.installations.paths` at a local JDK) and Node.js 18+ for the extension. On slow networks, mirroring Gradle/npm registries helps.
+Prerequisites: JDK 21 for the IDE plugin (Gradle provisions the toolchain automatically, or point `org.gradle.java.installations.paths` at a local JDK) and Node.js 18+ for the extension.
+
+To build against your **installed** IntelliJ platform instead of downloading one (~1 GB), add to your user-level `~/.gradle/gradle.properties`:
+
+```properties
+localIdePath=D:/path/to/your/idea
+# optional: org.gradle.java.installations.paths=D:/path/to/jdk-21
+```
+
+On slow networks, mirroring Gradle/npm registries helps.
 
 ```bash
 # IDE plugin

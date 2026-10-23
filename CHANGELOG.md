@@ -3,6 +3,15 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.2] - 2026-10-23
+
+### Fixed
+- `IllegalArgumentException: Cannot coerce value to an empty range` (unhandled EDT exception, reported by
+  PyCharm with `PyRunFileInConsole`): some editors (e.g. the Python console) can report a document with
+  zero lines; caret-line/offset clamping is now defensive.
+- Console editors are explicitly skipped (half of the documented "no switching in consoles" behavior was
+  implicit — Python console input editors have a PsiFile and were being evaluated).
+
 ## [1.4.1] - 2026-10-21
 
 ### Changed

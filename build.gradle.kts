@@ -1,3 +1,5 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+
 plugins {
     id("java")
     kotlin("jvm") version "2.4.21"
@@ -5,7 +7,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.4.1"
+version = "1.4.2"
 
 repositories {
     mavenCentral()
@@ -22,8 +24,14 @@ dependencies {
     testImplementation(kotlin("stdlib"))
 
     intellijPlatform {
-        // 对准本机安装的 IDEA，免下载 IDE 分发包
-        local("D:/software/JetBrains/idea-2026.1.1.win")
+        // 优先对准本机安装的 IDEA（用户级 ~/.gradle/gradle.properties 配 localIdePath=...），
+        // 未配置时从 JetBrains 仓库下载对应版本（首次约 1GB，较慢）
+        val localIdePath = providers.gradleProperty("localIdePath").orNull
+        if (!localIdePath.isNullOrBlank()) {
+            local(localIdePath)
+        } else {
+            create(IntelliJPlatformType.IntellijIdeaCommunity, "2026.1.4")
+        }
     }
 }
 

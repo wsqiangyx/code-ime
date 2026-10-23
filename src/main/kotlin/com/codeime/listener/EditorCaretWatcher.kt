@@ -158,6 +158,11 @@ class EditorCaretWatcher {
         val app = ApplicationManager.getApplication() ?: return
         if (!app.isActive()) { log.debug("evaluate skip: app inactive"); return }
         if (editor.isDisposed) { log.debug("evaluate skip: editor disposed"); return }
+        // 控制台/终端等非普通编辑器不切换（文档可能为空、行数异常，也避免打扰 REPL 输入）
+        if (editor.editorKind == com.intellij.openapi.editor.EditorKind.CONSOLE) {
+            log.debug("evaluate skip: console editor")
+            return
+        }
         if (editor.selectionModel.hasSelection()) { log.debug("evaluate skip: selection"); return }
         // 设置弹窗等抢焦点时不切换，模拟按键只会打进别的界面
         if (!editor.contentComponent.hasFocus()) { log.debug("evaluate skip: no focus"); return }

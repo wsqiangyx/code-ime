@@ -47,10 +47,11 @@ object ContextAnalyzer {
             return EditorContext.COMMENT
         }
 
-        val offset = editor.caretModel.offset.coerceIn(0, document.textLength)
+        val offset = editor.caretModel.offset.coerceIn(0, maxOf(0, document.textLength))
         // 用逻辑位置取光标行：光标停在空白行时偏移量与下一行起点重合，
-        // document.getLineNumber 会把光标行错算成下一行
-        val caretLine = editor.caretModel.logicalPosition.line.coerceIn(0, document.lineCount - 1)
+        // document.getLineNumber 会把光标行错算成下一行。
+        // 个别编辑器（如 Python 控制台）文档行数可能为 0，需防御越界
+        val caretLine = editor.caretModel.logicalPosition.line.coerceIn(0, maxOf(0, document.lineCount - 1))
         var leaf = psiFile.findElementAt(offset)
         if (leaf == null && offset > 0) {
             // 光标紧跟在最后一个字符之后（例如刚敲完一个字符，或行尾）
