@@ -117,6 +117,24 @@ class EditorCaretWatcher {
         }
     }
 
+    /**
+     * 用户手动切换了输入法（由 ImeModePoller 归因后调用，EDT 上执行）：
+     * 在当前光标语境记住用户的选择，自动切换在有效期内不再与用户抢。
+     */
+    fun recordUserOverride(mode: ImeMode) {
+        if (!CodeImeSettings.getInstance().state.respectManualToggles) return
+        val projects = com.intellij.openapi.project.ProjectManager.getInstanceIfCreated()?.openProjects
+        val editor = projects
+            ?.firstNotNullOfOrNull { p ->
+                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(p).selectedTextEditor
+            } ?: return
+        val state = stateFor(editor)
+        state.userOverride = mode
+        state.userOverrideAt = System.currentTimeMillis()
+        state.userOverrideContext = state.lastContext
+        log.debug("user override recorded: mode=$mode ctx=${state.lastContext}")
+    }
+
     private fun onCaretChanged(editor: Editor) {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
@@ -172,6 +190,19 @@ class EditorCaretWatcher {
         if (target == null) return
         if (effective == state.lastContext) return // 同一上下文内移动，不动作
 
+        // 用户手动覆盖：有效期内不与用户抢输入法（同语境或语境未知时生效）
+        if (settings.respectManualToggles) {
+            val o = state.userOverride
+            if (o != null && o != target &&
+                System.currentTimeMillis() - state.userOverrideAt < USER_OVERRIDE_TTL_MS &&
+                (state.userOverrideContext == null || state.userOverrideContext == effective)
+            ) {
+                log.debug("skip: user override mode=$o ctx=$effective")
+                state.lastContext = effective
+                return
+            }
+        }
+
         // 失败冷却：短时间内不对同一目标反复尝试
         if (target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS) {
             return
@@ -224,6 +255,11 @@ class EditorCaretWatcher {
     private class EditorState {
         var timer: Timer? = null
         var lastContext: EditorContext? = null
+
+        // 用户手动切换覆盖：在有效期内同语境不强制切换
+        var userOverride: ImeMode? = null
+        var userOverrideAt = 0L
+        var userOverrideContext: EditorContext? = null
     }
 
     private fun appDisposable() = Disposer.newDisposable().also {
@@ -237,5 +273,8 @@ class EditorCaretWatcher {
         private val STATE_KEY = Key.create<EditorState>("CodeIME.editorState")
         private const val DEBOUNCE_MS = 30
         private const val FAILURE_COOLDOWN_MS = 1500
+
+        /** 手动切换覆盖的有效期：期内同语境不强制切换 */
+        private const val USER_OVERRIDE_TTL_MS = 60_000L
     }
 }

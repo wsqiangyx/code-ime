@@ -3,6 +3,16 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.0] - 2026-10-21
+
+### Added
+- **Follow manual toggles（跟手模式）**: when the user manually toggles the input method (e.g. pressing
+  Shift inside a comment to type an English identifier), the plugin now attributes the mode change to
+  the user and stops force-switching within the same context for 60 seconds. Leaving the context
+  (comment → code) resumes normal auto switching. Implemented via a 250 ms mode poller that
+  attributes changes using the plugin's last injection timestamp. Disable via
+  `respectManualToggles` / 设置中的「优先跟随手动切换」.
+
 ## [1.3.0] - 2026-10-21
 
 ### Added

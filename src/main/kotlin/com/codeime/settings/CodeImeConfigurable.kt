@@ -22,6 +22,7 @@ class CodeImeConfigurable : Configurable {
     private var hotkeyField: JTextField? = null
     private var deactivateCombo: JComboBox<String>? = null
     private var notifyBox: JCheckBox? = null
+    private var followUserBox: JCheckBox? = null
 
     // 热键捕获的暂存值
     private var capturedKeyCode: Int = KeyEvent.VK_SHIFT
@@ -44,6 +45,10 @@ class CodeImeConfigurable : Configurable {
                 }
                 row {
                     checkBox("切换失败时弹出提醒").also { notifyBox = it.component }
+                }
+                row {
+                    checkBox("优先跟随手动切换（手动按 Shift 后 60 秒内，同语境不强制切换）")
+                        .also { followUserBox = it.component }
                 }
             }
             group("模拟热键") {
@@ -72,6 +77,7 @@ class CodeImeConfigurable : Configurable {
             stringBox?.isSelected != state.stringAsChinese ||
             directBox?.isSelected != state.useDirectImmSet ||
             notifyBox?.isSelected != state.showFailureNotifications ||
+            followUserBox?.isSelected != state.respectManualToggles ||
             capturedKeyCode != state.hotkeyCode ||
             capturedModifiers != state.hotkeyModifiers ||
             deactivateCombo?.selectedIndex != deactivateIndex(state.onDeactivate)
@@ -83,6 +89,7 @@ class CodeImeConfigurable : Configurable {
         s.stringAsChinese = stringBox?.isSelected ?: s.stringAsChinese
         s.useDirectImmSet = directBox?.isSelected ?: s.useDirectImmSet
         s.showFailureNotifications = notifyBox?.isSelected ?: s.showFailureNotifications
+        s.respectManualToggles = followUserBox?.isSelected ?: s.respectManualToggles
         s.hotkeyCode = capturedKeyCode
         s.hotkeyModifiers = capturedModifiers
         s.onDeactivate = when (deactivateCombo?.selectedIndex) {
@@ -99,6 +106,7 @@ class CodeImeConfigurable : Configurable {
         stringBox?.isSelected = state.stringAsChinese
         directBox?.isSelected = state.useDirectImmSet
         notifyBox?.isSelected = state.showFailureNotifications
+        followUserBox?.isSelected = state.respectManualToggles
         deactivateCombo?.selectedIndex = deactivateIndex(state.onDeactivate)
     }
 
@@ -109,6 +117,7 @@ class CodeImeConfigurable : Configurable {
         hotkeyField = null
         deactivateCombo = null
         notifyBox = null
+        followUserBox = null
     }
 
     private fun hotkeyCaptureListener(): KeyAdapter = object : KeyAdapter() {

@@ -161,6 +161,13 @@ async function verify(target: ImeMode): Promise<boolean> {
 }
 
 let lastHotkeyAt = 0;
+// 插件最近一次注入/直接设置的时间戳，用于把模式变化归因给插件或用户
+let lastSwitchAt = 0;
+
+/** 插件最近一次切换尝试的时间戳（手动切换跟手机制的归因依据） */
+export function lastPluginSwitchAt(): number {
+  return lastSwitchAt;
+}
 
 function isKeyHeld(vk: number): boolean {
   if (!GetAsyncKeyStateFn) return false;
@@ -208,6 +215,7 @@ export async function switchTo(
   if (currentMode() === target) return 'noop';
 
   if (useDirect && directSet(target)) {
+    lastSwitchAt = Date.now();
     if (await verify(target)) return 'direct';
   }
 
@@ -221,7 +229,10 @@ export async function switchTo(
     for (let attempt = 0; attempt < retryWaits.length; attempt++) {
       await sleep(retryWaits[attempt]);
       const pressed = await pressHotkey(key, mods);
-      if (pressed && (await verify(target))) return 'hotkey';
+      if (pressed) {
+        lastSwitchAt = Date.now();
+        if (await verify(target)) return 'hotkey';
+      }
     }
   }
   return 'failed';

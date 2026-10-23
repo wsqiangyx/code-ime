@@ -2,7 +2,7 @@
   "name": "code-ime",
   "displayName": "CodeIME 输入法自动切换",
   "description": "光标在注释中自动切换中文输入法，在代码中自动切换英文（Windows + 微软拼音）",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "codeime",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -73,6 +73,11 @@
           "type": "boolean",
           "default": true,
           "description": "切换失败时弹出提醒"
+        },
+        "codeIME.respectManualToggles": {
+          "type": "boolean",
+          "default": true,
+          "description": "优先跟随手动切换（手动按 Shift 后 60 秒内，同语境不强制切换）"
         }
       }
     }

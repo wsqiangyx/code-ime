@@ -19,7 +19,7 @@ While coding, you constantly switch between writing comments (Chinese) and writi
 | IntelliJ IDEA plugin (also PyCharm & other JetBrains IDEs) | this directory (Gradle) | PSI `PsiComment` (language-agnostic) | JNA `imm32` + hotkey fallback via `SendInput` |
 | VS Code extension | [`vscode/`](vscode/) | TextMate token scopes (JS/TS/CSS/HTML/Java/Python and any language with a grammar) | koffi `imm32` + hotkey fallback via atomic `SendInput` |
 
-Both support: comments → Chinese, code → English, optional Chinese inside strings, no switching while text is selected / the window is unfocused / in consoles, throttled failure notifications, and a configurable toggle hotkey. Python docstrings (`"""..."""`) count as comments.
+Both support: comments → Chinese, code → English, optional Chinese inside strings, no switching while text is selected / the window is unfocused / in consoles, throttled failure notifications, and a configurable toggle hotkey. Python docstrings (`"""..."""`) count as comments. **Follow-manual-toggles**: if you manually switch the IME (e.g. Shift inside a comment to type an English identifier), the plugin stands down for 60 s in that context instead of fighting you.
 
 ## Requirements
 

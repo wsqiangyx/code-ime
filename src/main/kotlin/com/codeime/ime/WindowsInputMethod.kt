@@ -31,6 +31,10 @@ class WindowsInputMethod : InputMethodController {
     private val log = Logger.getInstance("CodeIME.Diag")
     private var lastHotkeyAt = 0L
 
+    @Volatile private var lastSwitchAt = 0L
+
+    override fun lastPluginSwitchAt(): Long = lastSwitchAt
+
     override fun name() = "Windows IMM32"
 
     override fun isAvailable(): Boolean = SystemInfo.isWindows && Imm32Library.INSTANCE != null
@@ -48,7 +52,10 @@ class WindowsInputMethod : InputMethodController {
         if (settings.useDirectImmSet) {
             val directOk = callOnEdt { directSetInternal(target) }
             log.debug("directSet ok=$directOk")
-            if (directOk && verifyOnEdt(target)) return SwitchResult.DIRECT
+            if (directOk) {
+                lastSwitchAt = System.currentTimeMillis()
+                if (verifyOnEdt(target)) return SwitchResult.DIRECT
+            }
         }
 
         // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换，
@@ -59,7 +66,10 @@ class WindowsInputMethod : InputMethodController {
             sleepQuietly(retryWaits[attempt])
             val pressed = pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)
             log.debug("hotkey pressed attempt=$attempt ok=$pressed")
-            if (pressed && verifyOnEdt(target)) return SwitchResult.HOTKEY
+            if (pressed) {
+                lastSwitchAt = System.currentTimeMillis()
+                if (verifyOnEdt(target)) return SwitchResult.HOTKEY
+            }
             attempt++
         }
 

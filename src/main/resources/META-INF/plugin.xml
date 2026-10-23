@@ -26,6 +26,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.codeime.settings.CodeImeSettings"/>
         <applicationService serviceImplementation="com.codeime.listener.EditorCaretWatcher"/>
+        <applicationService serviceImplementation="com.codeime.ime.ImeModePoller"/>
         <applicationConfigurable id="com.codeime.settings" parentId="tools"
                                  displayName="CodeIME 输入法自动切换"
                                  instance="com.codeime.settings.CodeImeConfigurable"/>

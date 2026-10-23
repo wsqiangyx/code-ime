@@ -15,7 +15,7 @@
 | IntelliJ IDEA 插件（通用 PyCharm 等 JetBrains IDE） | 本目录（Gradle） | PSI `PsiComment`（所有语言通用） | JNA + imm32 / SendInput 原子热键兜底 |
 | VSCode 扩展 | [`vscode/`](vscode/) | TextMate token scope（js/ts/css/html/java/python 及所有有语法的语言） | koffi + imm32 / SendInput 原子热键兜底 |
 
-两者均支持：注释→中文、代码→英文、Python docstring（三引号）→中文、字符串可选中文、选中/失焦/控制台不切换、失败节流提醒、中英热键可配置。
+两者均支持：注释→中文、代码→英文、Python docstring（三引号）→中文、字符串可选中文、选中/失焦/控制台不切换、失败节流提醒、中英热键可配置、**跟手模式**（检测到手动切换后 60 秒内同语境不强制切换，不再与用户抢输入法）。
 
 ## 环境要求
 

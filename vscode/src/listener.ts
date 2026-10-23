@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { getConfig } from './config';
 import type { EditorContext } from './tm/types';
 import type { ImeAnalyzer } from './tm/analyzer';
-import { currentMode, switchTo, type ImeMode } from './ime/imm32';
+import { currentMode, lastPluginSwitchAt, switchTo, type ImeMode } from './ime/imm32';
 import type { StatusBarController } from './status';
 
 const DEBOUNCE_MS = 30;
@@ -22,6 +22,12 @@ export function registerListeners(
   let lastFailedTarget: ImeMode | null = null;
   let lastFailedAt = 0;
   let consecutiveFailures = 0;
+
+  // 手动切换覆盖：检测到用户手动切换后，同语境 60 秒内不强制切换（跟手机制）
+  let overrideMode: ImeMode | null = null;
+  let overrideAt = 0;
+  let overrideCtx: EditorContext | null = null;
+  let lastEvaluatedCtx: EditorContext | null = null;
 
   const isSupported = (editor: vscode.TextEditor) =>
     SUPPORTED_SCHEMES.has(editor.document.uri.scheme);
@@ -73,14 +79,21 @@ export function registerListeners(
               ? 'english'
               : null;
       if (!target) return;
+      lastEvaluatedCtx = ctx;
+
+      // 手动切换覆盖：有效期内同语境不与用户抢输入法
+      if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
+          Date.now() - overrideAt < 60000 && (overrideCtx === null || overrideCtx === ctx)) {
+        lastContext.set(editor, ctx);
+        return;
+      }
 
       // 失败冷却：短时间内不对同一目标反复尝试
       if (target === lastFailedTarget && Date.now() - lastFailedAt < 1500) return;
       lastContext.set(editor, ctx);
 
       const result = await switchTo(target, cfg.toggleHotkey, cfg.useDirectImmSet);
-      status.update(currentMode());
-      if (result === 'failed') {
+      status.update(currentMode());if (result === 'failed') {
         consecutiveFailures++;
         lastFailedTarget = target;
         lastFailedAt = Date.now();
@@ -139,6 +152,30 @@ export function registerListeners(
       if (e && isSupported(e)) resync();
     }),
   );
+
+  // 模式轮询（250ms）：把输入法模式变化归因给插件或用户，用户变化记录为手动覆盖
+  let lastKnownMode: ImeMode | null = null;
+  let pollerInitialized = false;
+  const modeTimer = setInterval(() => {
+    if (!vscode.window.state.focused) return;
+    const m = currentMode();
+    if (!m) return;
+    if (!pollerInitialized) {
+      pollerInitialized = true;
+      lastKnownMode = m;
+      return;
+    }
+    if (m === lastKnownMode) return;
+    const sincePlugin = Date.now() - lastPluginSwitchAt();
+    lastKnownMode = m;
+    if (sincePlugin < 0 || sincePlugin > 2500) {
+      overrideMode = m;
+      overrideAt = Date.now();
+      overrideCtx = lastEvaluatedCtx;
+      status.update(m);
+    }
+  }, 250);
+  context.subscriptions.push({ dispose: () => clearInterval(modeTimer) });
 
   status.update(currentMode());
 }

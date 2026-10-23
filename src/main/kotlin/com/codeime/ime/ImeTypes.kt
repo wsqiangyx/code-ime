@@ -21,6 +21,9 @@ interface InputMethodController {
     fun isAvailable(): Boolean
     fun currentMode(): ImeMode?
     fun switchTo(target: ImeMode): SwitchResult
+
+    /** 插件最近一次注入切换按键/直接设置的时间戳；用于把模式变化归因给插件还是用户 */
+    fun lastPluginSwitchAt(): Long = 0L
 }
 
 object InputMethodManager {

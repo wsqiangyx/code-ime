@@ -7,6 +7,7 @@ export interface CodeImeConfig {
   toggleHotkey: string;
   onDeactivate: string;
   showFailureNotifications: boolean;
+  respectManualToggles: boolean;
 }
 
 export function getConfig(): CodeImeConfig {
@@ -18,5 +19,6 @@ export function getConfig(): CodeImeConfig {
     toggleHotkey: c.get<string>('toggleHotkey', 'shift'),
     onDeactivate: c.get<string>('onDeactivate', 'none'),
     showFailureNotifications: c.get<boolean>('showFailureNotifications', true),
+    respectManualToggles: c.get<boolean>('respectManualToggles', true),
   };
 }

@@ -34,6 +34,9 @@ class CodeImeSettings : PersistentStateComponent<CodeImeSettings.State> {
 
         /** 切换失败时弹出提醒 */
         var showFailureNotifications: Boolean = true
+
+        /** 检测到用户手动切换后，一段时间内不再强制切换（跟手模式） */
+        var respectManualToggles: Boolean = true
     }
 
     @JvmField

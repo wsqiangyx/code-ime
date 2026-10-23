@@ -9,6 +9,8 @@ import com.intellij.ide.AppLifecycleListener
 class AppLifecycleWatcher : AppLifecycleListener {
 
     override fun appFrameCreated(commandLineArgs: MutableList<String>) {
-        ApplicationManager.getApplication()?.getService(EditorCaretWatcher::class.java)?.start()
+        val app = ApplicationManager.getApplication() ?: return
+        app.getService(EditorCaretWatcher::class.java)?.start()
+        app.getService(com.codeime.ime.ImeModePoller::class.java)?.start()
     }
 }
