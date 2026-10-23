@@ -9,9 +9,9 @@ const VK_SHIFT = 0x10;
 const VK_CONTROL = 0x11;
 const VK_SPACE = 0x20;
 
-// 轮询校验：总等待 ~240ms，容忍微软拼音经 TSF 应用新模式的滞后
-const VERIFY_POLL_COUNT = 4;
-const VERIFY_POLL_INTERVAL_MS = 60;
+// 回读校验间隔序列（毫秒）：先密后疏，累计约 250ms；
+// 大多数切换在 30~50ms 内生效，更早的首次回读能更快确认
+const VERIFY_POLL_DELAYS_MS = [20, 30, 45, 65, 90];
 // 两次注入的最小间隔：避开微软拼音的忽略窗口与 IDE 双击 Shift 窗口
 const HOTKEY_MIN_SPACING_MS = 800;
 
@@ -153,8 +153,8 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
  * 单次短延迟回读会误判（实际已切换却被判失败，进而反复模拟热键来回振荡）。
  */
 async function verify(target: ImeMode): Promise<boolean> {
-  for (let i = 0; i < VERIFY_POLL_COUNT; i++) {
-    await sleep(VERIFY_POLL_INTERVAL_MS);
+  for (const delay of VERIFY_POLL_DELAYS_MS) {
+    await sleep(delay);
     if (currentMode() === target) return true;
   }
   return false;

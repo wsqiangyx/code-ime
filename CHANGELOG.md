@@ -3,6 +3,13 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.1] - 2026-10-21
+
+### Changed
+- Faster switch confirmation: verification now polls at 20/30/45/65/90 ms (dense-to-sparse,
+  ~250 ms total) instead of fixed 60 ms intervals — typical first-entry switch latency drops
+  from ~110 ms to ~70–90 ms. Debounce shortened 30 ms → 20 ms.
+
 ## [1.4.0] - 2026-10-21
 
 ### Added

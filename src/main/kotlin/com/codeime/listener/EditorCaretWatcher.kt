@@ -271,7 +271,7 @@ class EditorCaretWatcher {
         private val ATTACHED_LISTENER_KEY =
             Key.create<Pair<CaretListener, com.intellij.openapi.editor.event.SelectionListener>>("CodeIME.caretListener")
         private val STATE_KEY = Key.create<EditorState>("CodeIME.editorState")
-        private const val DEBOUNCE_MS = 30
+        private const val DEBOUNCE_MS = 20
         private const val FAILURE_COOLDOWN_MS = 1500
 
         /** 手动切换覆盖的有效期：期内同语境不强制切换 */

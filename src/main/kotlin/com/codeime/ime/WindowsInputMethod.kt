@@ -122,16 +122,15 @@ class WindowsInputMethod : InputMethodController {
 
     /**
      * 轮询式校验：微软拼音经 TSF 应用新模式可能滞后数百毫秒，
-     * 单次 80ms 回读会造成误判（实际已切换却被判失败，进而反复模拟热键来回振荡）。
+     * 单次回读会造成误判。先密后疏（20/30/45/65/90ms）：
+     * 大多数切换在 30~50ms 内生效，能被更早地确认。
      */
     private fun verifyOnEdt(target: ImeMode): Boolean {
-        var attempts = 0
-        while (attempts < VERIFY_POLL_COUNT) {
-            sleepQuietly(VERIFY_POLL_INTERVAL_MS)
+        for (delay in VERIFY_POLL_DELAYS_MS) {
+            sleepQuietly(delay.toLong())
             val mode = callOnEdt { currentModeInternal() }
-            log.debug("verify #$attempts mode=$mode want=$target")
+            log.debug("verify mode=$mode want=$target after=${delay}ms")
             if (mode == target) return true
-            attempts++
         }
         return false
     }
@@ -211,8 +210,8 @@ class WindowsInputMethod : InputMethodController {
     }
 
     companion object {
-        private const val VERIFY_POLL_COUNT = 4
-        private const val VERIFY_POLL_INTERVAL_MS = 60L
+        /** 回读校验的间隔序列（毫秒）：先密后疏，累计约 250ms */
+        private val VERIFY_POLL_DELAYS_MS = intArrayOf(20, 30, 45, 65, 90)
 
         /** 两次注入的最小间隔：避开微软拼音的忽略窗口与 IDE 双击 Shift 窗口 */
         private const val HOTKEY_MIN_SPACING_MS = 800L

@@ -5,7 +5,7 @@ import type { ImeAnalyzer } from './tm/analyzer';
 import { currentMode, lastPluginSwitchAt, switchTo, type ImeMode } from './ime/imm32';
 import type { StatusBarController } from './status';
 
-const DEBOUNCE_MS = 30;
+const DEBOUNCE_MS = 20;
 const SUPPORTED_SCHEMES = new Set(['file', 'untitled', 'git', 'vscode-scm', 'vscode-remote']);
 
 export function registerListeners(
