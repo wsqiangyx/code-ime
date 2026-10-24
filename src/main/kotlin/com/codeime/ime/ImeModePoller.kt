@@ -55,9 +55,9 @@ class ImeModePoller {
         val attributedToPlugin = sincePlugin in 0..PLUGIN_ATTRIBUTION_MS
         lastKnown = mode
         if (attributedToPlugin) {
-            log.debug("mode change -> plugin (since=$sincePlugin mode=$mode)")
+            log.info("mode change -> plugin (since=$sincePlugin mode=$mode)")
         } else {
-            log.debug("mode change -> user (since=$sincePlugin mode=$mode)")
+            log.info("mode change -> user (since=$sincePlugin mode=$mode)")
             ApplicationManager.getApplication().invokeLater {
                 ApplicationManager.getApplication()
                     ?.getService(EditorCaretWatcher::class.java)
