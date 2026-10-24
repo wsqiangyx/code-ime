@@ -60,6 +60,18 @@ intellijPlatform {
         }
     }
 
+    pluginVerification {
+        // 对本机安装的 IDE 做兼容性验证（未配置 localIdePath 时回退到推荐版本列表）
+        val localIde = providers.gradleProperty("localIdePath").orNull
+        ides {
+            if (localIde.isNullOrBlank()) {
+                recommended()
+            } else {
+                local(localIde)
+            }
+        }
+    }
+
     publishing {
         // 令牌从 ~/.gradle/gradle.properties（intellijPublishToken=...）
         // 或环境变量 INTELLIJ_PUBLISH_TOKEN 读取，勿提交到仓库

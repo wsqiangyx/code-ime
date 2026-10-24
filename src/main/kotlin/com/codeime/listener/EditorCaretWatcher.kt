@@ -8,7 +8,6 @@ import com.codeime.ime.SwitchResult
 import com.codeime.settings.CodeImeSettings
 import com.codeime.ui.SwitchNotifier
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.CaretEvent
@@ -238,9 +237,8 @@ class EditorCaretWatcher {
         val settings = CodeImeSettings.getInstance().state
         if (!settings.enabled) { log.debug("evaluate skip: disabled"); return }
 
-        val context = ReadAction.compute<EditorContext, RuntimeException> {
-            ContextAnalyzer.analyze(editor, project)
-        }
+        // EDT 上自带读权限，无需 ReadAction 包装（ReadAction.compute 已弃用）
+        val context = ContextAnalyzer.analyze(editor, project)
 
         // PSI 滞后兜底：PSI 认为是代码，但光标所在行前面已经出现了 "//"，按注释处理
         val effective = if (context == EditorContext.CODE && lineBeforeCaretContainsLineComment(editor)) {
