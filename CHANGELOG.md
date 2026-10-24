@@ -3,6 +3,16 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.2] - 2026-10-23
+
+### Added
+- **Character consistency in no-intervention contexts（字符一致性）**: when the context is
+  "no-intervention" (strings by default), the plugin now follows the character before the caret —
+  CJK characters/punctuation → Chinese, ASCII letters → English, digits/space/symbols → keep
+  current. Example: type Chinese inside a string, move past the closing quote/brace → switches to
+  English; move back next to the Chinese text → Chinese again.
+- 9 char-mode cases (VSCode harness) + 9 assertions (IDEA toggleLogicProbe); total 51 + 31.
+
 ## [1.5.1] - 2026-10-23
 
 ### Fixed

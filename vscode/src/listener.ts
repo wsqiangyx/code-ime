@@ -3,6 +3,7 @@ import { getConfig } from './config';
 import type { EditorContext } from './tm/types';
 import type { ImeAnalyzer } from './tm/analyzer';
 import { currentMode, lastPluginSwitchAt, switchTo, type ImeMode } from './ime/imm32';
+import { modeFromChar } from './char-mode';
 import type { StatusBarController } from './status';
 
 const DEBOUNCE_MS = 20;
@@ -79,7 +80,9 @@ export function registerListeners(
           : ctx === 'string'
             ? cfg.stringAsChinese
               ? 'chinese'
-              : null
+              : offset > 0
+                ? modeFromChar(doc.getText(new vscode.Range(doc.positionAt(offset - 1), doc.positionAt(offset))))
+                : null
             : ctx === 'code'
               ? 'english'
               : null;

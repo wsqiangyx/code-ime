@@ -1,5 +1,6 @@
 package com.codeime.tools
 
+import com.codeime.ime.ImeMode
 import com.codeime.ime.Imm32Library
 import com.codeime.ime.User32Ex
 import com.sun.jna.platform.win32.User32
@@ -103,6 +104,17 @@ fun main() {
 
     // ===== 2. 假定模式逻辑 =====
     println("\n===== 假定模式逻辑 =====")
+
+    // 字符一致性规则
+    println("\n===== 字符一致性（ImeMode.fromChar） =====")
+    check("汉字→中文", ImeMode.fromChar('中'), ImeMode.CHINESE)
+    check("中文句号→中文", ImeMode.fromChar('。'), ImeMode.CHINESE)
+    check("全角冒号→中文", ImeMode.fromChar('：'), ImeMode.CHINESE)
+    check("ASCII字母→英文", ImeMode.fromChar('a'), ImeMode.ENGLISH)
+    check("大写字母→英文", ImeMode.fromChar('Z'), ImeMode.ENGLISH)
+    check("数字→保持现状", ImeMode.fromChar('3'), null)
+    check("空格→保持现状", ImeMode.fromChar(' '), null)
+    check("连字符→保持现状", ImeMode.fromChar('-'), null)
     class AssumedModeTracker(initial: String? = null) {
         var mode: String? = initial; private set
         fun onPluginSwitch(target: String) { mode = target }

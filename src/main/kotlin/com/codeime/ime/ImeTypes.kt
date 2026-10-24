@@ -1,7 +1,28 @@
 package com.codeime.ime
 
 /** 目标输入模式 */
-enum class ImeMode { CHINESE, ENGLISH }
+enum class ImeMode { CHINESE, ENGLISH;
+    companion object {
+        private fun isCjkChar(c: Char): Boolean {
+            val v = c.code
+            return (v in 0x3000..0x303F) ||   // CJK 标点（。，、）
+                (v in 0x4E00..0x9FFF) ||       // CJK 统一表意文字
+                (v in 0x3400..0x4DBF) ||       // 扩展 A
+                (v in 0xF900..0xFAFF) ||       // 兼容表意文字
+                (v in 0xFF00..0xFFEF)          // 全角形式（！：（）等）
+        }
+
+        /**
+         * 按前一个字符推断输入模式（用于"不干预"语境的字符一致性）：
+         * CJK/中文标点 → 中文；ASCII 字母 → 英文；数字/空格/符号 → null（保持现状）
+         */
+        fun fromChar(c: Char): ImeMode? = when {
+            isCjkChar(c) -> CHINESE
+            c.isLetter() && c.code < 0x80 -> ENGLISH
+            else -> null
+        }
+    }
+}
 
 /** 一次切换动作的结果 */
 enum class SwitchResult {

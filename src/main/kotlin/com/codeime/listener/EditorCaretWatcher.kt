@@ -251,7 +251,17 @@ class EditorCaretWatcher {
 
         val target = when (effective) {
             EditorContext.COMMENT -> ImeMode.CHINESE
-            EditorContext.STRING -> if (settings.stringAsChinese) ImeMode.CHINESE else null
+            EditorContext.STRING -> if (settings.stringAsChinese) {
+                ImeMode.CHINESE
+            } else {
+                // 字符一致性：跟随光标前一个字符的类型（中文字符→中文，英文字母→英文）
+                val offset = editor.caretModel.offset
+                if (offset > 0) {
+                    ImeMode.fromChar(editor.document.charsSequence[offset - 1])
+                } else {
+                    null
+                }
+            }
             EditorContext.CODE -> ImeMode.ENGLISH
             EditorContext.UNKNOWN -> null
         }

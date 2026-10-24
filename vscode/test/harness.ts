@@ -4,6 +4,7 @@ import * as oniguruma from 'vscode-oniguruma';
 import { FsGrammarSource } from '../src/tm/grammarSource';
 import { TmRegistry } from '../src/tm/registry';
 import { ImeAnalyzer } from '../src/tm/analyzer';
+import { modeFromChar } from '../src/char-mode';
 
 const VSCODE_EXTENSIONS =
   process.env.VSCODE_EXTENSIONS ?? 'D:/software/VSCode/6d62b1d5da/resources/app/extensions';
@@ -62,6 +63,29 @@ const cases: Case[] = [
   { lang: 'html', code: '<!--\n多行\nHTML\n注释@\n-->\n<div></div>', expected: 'comment', note: '多行 HTML 注释' },
 ];
 
+// ===== 字符一致性规则（modeFromChar）=====
+function testCharMode(): { pass: number; fail: number } {
+  const cases: [string, string | null, string][] = [
+    ['中', 'chinese', '汉字 → 中文'],
+    ['。', 'chinese', '中文句号 → 中文'],
+    ['：', 'chinese', '全角冒号 → 中文'],
+    ['a', 'english', 'ASCII 字母 → 英文'],
+    ['Z', 'english', '大写字母 → 英文'],
+    ['3', null, '数字 → 保持现状'],
+    [' ', null, '空格 → 保持现状'],
+    ['-', null, '连字符 → 保持现状'],
+    ['', null, '空 → 保持现状'],
+  ];
+  let pass = 0, fail = 0;
+  for (const [ch, expected, note] of cases) {
+    const got = modeFromChar(ch);
+    const ok = got === expected;
+    if (ok) pass++; else fail++;
+    console.log(`${ok ? 'PASS' : 'FAIL'} [char] '${ch}' expected=${expected} got=${got}  (${note})`);
+  }
+  return { pass, fail };
+}
+
 function makeDoc(text: string) {
   const lines = text.split('\n');
   const lineStarts: number[] = [];
@@ -102,6 +126,10 @@ async function main() {
 
   let pass = 0;
   let fail = 0;
+  // 字符一致性规则
+  const cm = testCharMode();
+  pass += cm.pass; fail += cm.fail;
+
   for (const c of cases) {
     const marker = c.code.indexOf('@');
     if (marker < 0) throw new Error('case 缺少 @ 标记: ' + c.code);
