@@ -2,6 +2,7 @@ package com.codeime.ui
 
 import com.codeime.ime.ImeMode
 import com.codeime.ime.InputMethodManager
+import com.codeime.ime.WindowsInputMethod
 import com.codeime.settings.CodeImeSettings
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
@@ -51,7 +52,12 @@ class CodeImeWidget(private val project: Project) : StatusBarWidget, StatusBarWi
 
     override fun getText(): String {
         if (!CodeImeSettings.getInstance().state.enabled) return "IME ✕"
-        return when (InputMethodManager.instance.currentMode()) {
+        // displayMode：真实状态优先，TSF 架构下回退到虚拟状态（由键盘钩子保持同步）
+        val mode = when (val c = InputMethodManager.instance) {
+            is WindowsInputMethod -> c.displayMode()
+            else -> c.currentMode()
+        }
+        return when (mode) {
             ImeMode.CHINESE -> "中"
             ImeMode.ENGLISH -> "英"
             null -> "IME"

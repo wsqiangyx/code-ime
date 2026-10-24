@@ -44,14 +44,28 @@ class WindowsInputMethod : InputMethodController {
 
     override fun lastPluginSwitchAt(): Long = lastSwitchAt
 
+    /** 供状态栏显示：真实状态优先，读不到时用虚拟状态 */
+    fun displayMode(): ImeMode? = currentMode() ?: assumedMode
+
+    /**
+     * 用户手动切换了输入法（由 KbdHookWatcher 检测到物理 Shift 按下后调用）。
+     * 翻转假定模式并归因给"已知切换"。在 EDT 上调用。
+     */
+    fun onUserManualToggle(): ImeMode {
+        val new = when (assumedMode) {
+            ImeMode.CHINESE -> ImeMode.ENGLISH
+            else -> ImeMode.CHINESE
+        }
+        assumedMode = new
+        lastSwitchAt = System.currentTimeMillis()
+        return new
+    }
+
     override fun name() = "Windows IMM32"
 
     override fun isAvailable(): Boolean = SystemInfo.isWindows && Imm32Library.INSTANCE != null
 
     override fun currentMode(): ImeMode? = callOnEdt { currentModeInternal() }
-
-    /** 供状态栏显示：真实状态优先，读不到时用虚拟状态 */
-    fun displayMode(): ImeMode? = currentMode() ?: assumedMode
 
     override fun switchTo(target: ImeMode): SwitchResult {
         if (!isAvailable()) { log.debug("switchTo skip: unavailable"); return SwitchResult.FAILED }

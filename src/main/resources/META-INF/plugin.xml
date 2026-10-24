@@ -27,6 +27,7 @@
         <applicationService serviceImplementation="com.codeime.settings.CodeImeSettings"/>
         <applicationService serviceImplementation="com.codeime.listener.EditorCaretWatcher"/>
         <applicationService serviceImplementation="com.codeime.ime.ImeModePoller"/>
+        <applicationService serviceImplementation="com.codeime.ime.KbdHookWatcher"/>
         <applicationConfigurable id="com.codeime.settings" parentId="tools"
                                  displayName="CodeIME 输入法自动切换"
                                  instance="com.codeime.settings.CodeImeConfigurable"/>
