@@ -44,6 +44,22 @@ const cases: Case[] = [
   { lang: 'java', code: '    @int x = 1;', expected: 'code', note: '代码行行首缩进仍是代码' },
   { lang: 'python', code: '    @# 注释', expected: 'comment', note: 'Python 缩进注释' },
   { lang: 'html', code: '  @<!-- 注释 -->', expected: 'comment', note: 'HTML 缩进注释' },
+  // === v1.5.0 新增边界用例 ===
+  { lang: 'javascript', code: '//@', expected: 'comment', note: '仅 // 无内容（文件末尾）' },
+  { lang: 'javascript', code: '// @', expected: 'comment', note: '// 后只有空格' },
+  { lang: 'javascript', code: '// 注释A\n// 注释B@\n// 注释C', expected: 'comment', note: '连续注释行中间' },
+  { lang: 'javascript', code: 'foo() // @行尾注释紧贴代码', expected: 'comment', note: '行尾注释光标在 // 后' },
+  { lang: 'javascript', code: 'const s = "//@not a comment";', expected: 'string', note: '字符串内的 // 应判为字符串' },
+  { lang: 'javascript', code: 'const s = "/*@not a comment*/";', expected: 'string', note: '字符串内的块注释符号' },
+  { lang: 'javascript', code: '/* 块注释\n@*/\ncode();', expected: 'comment', note: '块注释最后一行' },
+  { lang: 'javascript', code: '@/* 文件开头就是注释 */', expected: 'comment', note: '第 0 行注释' },
+  { lang: 'javascript', code: 'function f(/* 参数注释@ */) {}', expected: 'comment', note: '函数参数中的注释' },
+  { lang: 'python', code: '#@', expected: 'comment', note: '仅 # 无内容' },
+  { lang: 'python', code: '# @中文注释末尾', expected: 'comment', note: '# 后空格+中文' },
+  { lang: 'python', code: 'def f():\n    """doc\n    多行@文档\n    """\n    pass', expected: 'string', note: '多行 docstring 中间行（Python）' },
+  { lang: 'python', code: 'x = "中@文字符串"', expected: 'string', note: '含中文字符的字符串' },
+  { lang: 'css', code: '/* 多行\n   CSS\n   注释@ */\nbody {}', expected: 'comment', note: '多行 CSS 注释' },
+  { lang: 'html', code: '<!--\n多行\nHTML\n注释@\n-->\n<div></div>', expected: 'comment', note: '多行 HTML 注释' },
 ];
 
 function makeDoc(text: string) {

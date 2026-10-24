@@ -82,3 +82,10 @@ tasks.register<JavaExec>("sendInputProbe") {
     mainClass = "com.codeime.tools.SendInputProbeKt"
     classpath = sourceSets["test"].runtimeClasspath
 }
+
+/** 核心逻辑测试（状态机+假定模式+上下文判定+IMM32）：./gradlew toggleLogicProbe */
+tasks.register<JavaExec>("toggleLogicProbe") {
+    group = "verification"
+    mainClass = "com.codeime.tools.ToggleLogicProbeKt"
+    classpath = sourceSets["test"].runtimeClasspath
+}
