@@ -3,6 +3,14 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.1] - 2026-10-23
+
+### Fixed
+- Manually-set Chinese inside a string stuck after leaving the string: when the current context was
+  "no-intervention" (strings by default), `lastContext` was not updated, so moving from the string
+  back to code was treated as "same context" and the switch to English was skipped. Context tracking
+  now always updates; the follow-manual override is also recorded with the correct context.
+
 ## [1.4.5] - 2026-10-23
 
 ### Fixed

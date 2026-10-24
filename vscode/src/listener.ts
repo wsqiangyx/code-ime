@@ -66,7 +66,12 @@ export function registerListeners(
         ctx = await analyzer.classify(doc.languageId, doc, offset);
       }
 
-      if (ctx === lastContext.get(editor)) return; // 同一上下文内移动，不动作
+      // 语境跟踪必须始终更新：即使当前语境"不干预"（如默认的字符串）。
+      // 否则从字符串移回代码时会被"同语境不动作"误拦，手动切成的中文会挂到代码区。
+      const prevCtx = lastContext.get(editor) ?? null;
+      const sameCtx = ctx === prevCtx;
+      lastContext.set(editor, ctx);
+      lastEvaluatedCtx = ctx;
 
       const target: ImeMode | null =
         ctx === 'comment'
@@ -79,18 +84,16 @@ export function registerListeners(
               ? 'english'
               : null;
       if (!target) return;
-      lastEvaluatedCtx = ctx;
+      if (sameCtx) return;
 
       // 手动切换覆盖：有效期内同语境不与用户抢输入法
       if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
           Date.now() - overrideAt < 60000 && (overrideCtx === null || overrideCtx === ctx)) {
-        lastContext.set(editor, ctx);
         return;
       }
 
       // 失败冷却：短时间内不对同一目标反复尝试
       if (target === lastFailedTarget && Date.now() - lastFailedAt < 1500) return;
-      lastContext.set(editor, ctx);
 
       const result = await switchTo(target, cfg.toggleHotkey, cfg.useDirectImmSet);
       status.update(currentMode());if (result === 'failed') {
