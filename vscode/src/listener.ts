@@ -69,8 +69,6 @@ export function registerListeners(
 
       // 语境跟踪必须始终更新：即使当前语境"不干预"（如默认的字符串）。
       // 否则从字符串移回代码时会被"同语境不动作"误拦，手动切成的中文会挂到代码区。
-      const prevCtx = lastContext.get(editor) ?? null;
-      const sameCtx = ctx === prevCtx;
       lastContext.set(editor, ctx);
       lastEvaluatedCtx = ctx;
 
@@ -87,7 +85,6 @@ export function registerListeners(
               ? 'english'
               : null;
       if (!target) return;
-      if (sameCtx) return;
 
       // 手动切换覆盖：有效期内同语境不与用户抢输入法
       if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&

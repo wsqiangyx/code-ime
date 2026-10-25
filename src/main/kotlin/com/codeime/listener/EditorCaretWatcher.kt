@@ -207,7 +207,8 @@ class EditorCaretWatcher {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
         log.info(
-            "caretChanged offset=${editor.caretModel.offset} " +
+            "caretChanged file=${editor.virtualFile?.name} kind=${editor.editorKind} " +
+                "offset=${editor.caretModel.offset} " +
                 "line=${editor.document.getLineNumber(editor.caretModel.offset)} " +
                 "sel=${editor.selectionModel.hasSelection()} " +
                 "focus=${editor.contentComponent.hasFocus()} " +
@@ -271,18 +272,14 @@ class EditorCaretWatcher {
         }
         val state = stateFor(editor)
         val prevContext = state.lastContext
-        val sameContext = effective == prevContext
         // 语境跟踪必须始终更新：即使当前语境"不干预"（如默认的字符串）。
-        // 否则从字符串移回代码时，lastContext 仍停留在进入前的 CODE，
-        // 会被"同语境不动作"误拦，导致手动切成的中文一直挂到代码区。
         state.lastContext = effective
         log.info(
             "evaluate: offset=${editor.caretModel.offset} ctx=$context effective=$effective " +
-                "target=${target ?: "NONE(不干预)"} prev=$prevContext same=$sameContext " +
+                "target=${target ?: "NONE(不干预)"} prev=$prevContext " +
                 "cooldown=${target != null && target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS}"
         )
         if (target == null) return
-        if (sameContext) return // 同一上下文内移动，不动作
 
         // 用户手动覆盖：有效期内不与用户抢输入法（同语境或语境未知时生效）
         if (settings.respectManualToggles) {

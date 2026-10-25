@@ -164,6 +164,9 @@ let lastHotkeyAt = 0;
 // 插件最近一次注入/直接设置的时间戳，用于把模式变化归因给插件或用户。
 // 初始化为当前时刻，否则 (Date.now() - 0) 巨大，首次变化会被误判为用户手动切换
 let lastSwitchAt = Date.now();
+// 假定模式：读不到真实状态（TSF 架构）时用插件自己的切换意图跟踪，
+// 避免每次光标事件都盲发热键（连续两次会把中英抵消）
+let assumedMode: 'chinese' | 'english' | null = null;
 
 /** 插件最近一次切换尝试的时间戳（手动切换跟手机制的归因依据） */
 export function lastPluginSwitchAt(): number {
@@ -213,10 +216,13 @@ export async function switchTo(
   useDirect: boolean,
 ): Promise<SwitchResult> {
   if (!ready) return 'failed';
-  if (currentMode() === target) return 'noop';
+  const real = currentMode();
+  // 读不到真实状态（TSF 架构）时用假定模式判断"是否已处于目标模式"
+  const current = real ?? assumedMode;
+  if (current === target) return 'noop';
 
   if (useDirect && directSet(target)) {
-    lastSwitchAt = Date.now();
+    assumedMode = target;
     if (await verify(target)) return 'direct';
   }
 
@@ -231,7 +237,7 @@ export async function switchTo(
       await sleep(retryWaits[attempt]);
       const pressed = await pressHotkey(key, mods);
       if (pressed) {
-        lastSwitchAt = Date.now();
+        assumedMode = target;
         if (await verify(target)) return 'hotkey';
       }
     }
