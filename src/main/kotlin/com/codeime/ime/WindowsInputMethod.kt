@@ -96,9 +96,10 @@ class WindowsInputMethod : InputMethodController {
             }
         }
 
-        // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换，
-        // 重试间隔 ≥800ms 也避开了 IDE「双击 Shift 全局搜索」的判定窗口。
-        val retryWaits = longArrayOf(0L, 800L, 2000L)
+        // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换（实测窗口 1.1~2.9s）。
+        // 4 次尝试，间隔 1.5s 递增：逐步跨出忽略窗口，同时避开「双击 Shift 全局搜索」判定。
+        // 日志实测：336 次切换 8 次失败（2.4%）均为落在忽略窗口内，此节奏可覆盖。
+        val retryWaits = longArrayOf(0L, 1500L, 3000L, 4500L)
         var attempt = 0
         while (attempt < retryWaits.size && settings.hotkeyCode != 0) {
             sleepQuietly(retryWaits[attempt])
