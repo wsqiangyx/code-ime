@@ -148,7 +148,7 @@ class EditorCaretWatcher {
         // 同步假定模式：TSF 架构下 IMM32 读不到真实状态，虚拟状态必须跟随用户动作
         (InputMethodManager.instance as? com.codeime.ime.WindowsInputMethod)
             ?.syncAssumedMode(mode)
-        log.info("user override recorded: mode=$mode ctx=${state.lastContext}")
+        log.debug("user override recorded: mode=$mode ctx=${state.lastContext}")
     }
 
     /**
@@ -170,7 +170,7 @@ class EditorCaretWatcher {
         if (selected != null && selected !== editor) {
             val selectedFile = selected.document
             if (selectedFile !== editor.document) {
-                log.info("focus check: not selected file (${editor.document.hashCode()})")
+                log.debug("focus check: not selected file (${editor.document.hashCode()})")
                 return false
             }
         }
@@ -178,15 +178,15 @@ class EditorCaretWatcher {
         // 2) 当前焦点必须在 IDE 的普通窗口上（对话框/弹窗抢焦点时跳过，避免模拟按键打进对话框）
         val focused = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().focusedWindow
         if (focused == null) {
-            log.info("focus check: focusedWindow=null")
+            log.debug("focus check: focusedWindow=null")
             return false
         }
         if (!focused.isShowing) {
-            log.info("focus check: not showing (${focused.javaClass.simpleName})")
+            log.debug("focus check: not showing (${focused.javaClass.simpleName})")
             return false
         }
         if (isDialog(focused)) {
-            log.info("focus check: dialog focused (${focused.javaClass.simpleName})")
+            log.debug("focus check: dialog focused (${focused.javaClass.simpleName})")
             return false
         }
         return true
@@ -206,14 +206,17 @@ class EditorCaretWatcher {
     private fun onCaretChanged(editor: Editor) {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
-        log.info(
-            "caretChanged file=${editor.virtualFile?.name} kind=${editor.editorKind} " +
-                "offset=${editor.caretModel.offset} " +
-                "line=${editor.document.getLineNumber(editor.caretModel.offset)} " +
-                "sel=${editor.selectionModel.hasSelection()} " +
-                "focus=${editor.contentComponent.hasFocus()} " +
-                "active=${ApplicationManager.getApplication()?.isActive()}"
-        )
+        if (log.isDebugEnabled) {
+            // 注意：不要记录 contentComponent.hasFocus()——2026.x 的 Compose 渲染下恒为 false，
+            // 真实焦点判定见 isEditorContextFocused()
+            log.debug(
+                "caretChanged file=${editor.virtualFile?.name} kind=${editor.editorKind} " +
+                    "offset=${editor.caretModel.offset} " +
+                    "line=${editor.document.getLineNumber(editor.caretModel.offset)} " +
+                    "sel=${editor.selectionModel.hasSelection()} " +
+                    "active=${ApplicationManager.getApplication()?.isActive()}"
+            )
+        }
         val state = stateFor(editor)
         // 50ms 防抖：连续光标事件只保留最后一次
         val timer = state.timer ?: Timer(DEBOUNCE_MS) { evaluate(project, editor) }.also {
@@ -225,21 +228,21 @@ class EditorCaretWatcher {
 
     private fun evaluate(project: com.intellij.openapi.project.Project, editor: Editor) {
         val app = ApplicationManager.getApplication() ?: return
-        if (!app.isActive()) { log.info("evaluate skip: app inactive"); return }
-        if (editor.isDisposed) { log.info("evaluate skip: editor disposed"); return }
+        if (!app.isActive()) { log.debug("evaluate skip: app inactive"); return }
+        if (editor.isDisposed) { log.debug("evaluate skip: editor disposed"); return }
         // 控制台/终端等非普通编辑器不切换（文档可能为空、行数异常，也避免打扰 REPL 输入）
         if (editor.editorKind == com.intellij.openapi.editor.EditorKind.CONSOLE) {
-            log.info("evaluate skip: console editor")
+            log.debug("evaluate skip: console editor")
             return
         }
-        if (editor.selectionModel.hasSelection()) { log.info("evaluate skip: selection"); return }
+        if (editor.selectionModel.hasSelection()) { log.debug("evaluate skip: selection"); return }
         // 设置弹窗/对话框抢焦点时不切换，避免模拟按键打进别的界面。
         // 注意：不能用 editor.contentComponent.hasFocus()——在 PyCharm 2026.x 的
         // Compose/Skiko 渲染架构下它恒为 false，会把所有切换拦死（1.4.3 及更早的真实故障）。
         // 改为判断：IDE 处于激活状态 + 当前焦点窗口属于本应用 + 该编辑器所在文件是当前选中文件。
-        if (!isEditorContextFocused(project, editor)) { log.info("evaluate skip: no focus"); return }
+        if (!isEditorContextFocused(project, editor)) { log.debug("evaluate skip: no focus"); return }
         val settings = CodeImeSettings.getInstance().state
-        if (!settings.enabled) { log.info("evaluate skip: disabled"); return }
+        if (!settings.enabled) { log.debug("evaluate skip: disabled"); return }
 
         // EDT 上访问 PSI 需要 WriteIntentReadAction（2026.2 起强制断言；
         // 旧写法 ReadAction.compute 已弃用——1.5.1 的回归正是移除读锁导致）
@@ -274,7 +277,7 @@ class EditorCaretWatcher {
         val prevContext = state.lastContext
         // 语境跟踪必须始终更新：即使当前语境"不干预"（如默认的字符串）。
         state.lastContext = effective
-        log.info(
+        log.debug(
             "evaluate: offset=${editor.caretModel.offset} ctx=$context effective=$effective " +
                 "target=${target ?: "NONE(不干预)"} prev=$prevContext " +
                 "cooldown=${target != null && target == lastFailedTarget && System.currentTimeMillis() - lastFailedAt < FAILURE_COOLDOWN_MS}"
@@ -288,7 +291,7 @@ class EditorCaretWatcher {
                 System.currentTimeMillis() - state.userOverrideAt < USER_OVERRIDE_TTL_MS &&
                 (state.userOverrideContext == null || state.userOverrideContext == effective)
             ) {
-                log.info("skip: user override mode=$o ctx=$effective")
+                log.debug("skip: user override mode=$o ctx=$effective")
                 return
             }
         }
@@ -301,12 +304,12 @@ class EditorCaretWatcher {
         val gen = switchGeneration.incrementAndGet()
         switchExecutor.execute {
             if (switchGeneration.get() != gen) {
-                log.info("switch skipped: stale (gen=$gen current=${switchGeneration.get()})")
+                log.debug("switch skipped: stale (gen=$gen current=${switchGeneration.get()})")
                 return@execute
             }
             try {
                 val result = InputMethodManager.instance.switchTo(target)
-                log.info("switch result=$result target=$target")
+                log.debug("switch result=$result target=$target")
                 if (result == SwitchResult.FAILED) {
                     consecutiveFailures++
                     lastFailedTarget = target
