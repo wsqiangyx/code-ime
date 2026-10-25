@@ -3,6 +3,21 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.4] - 2026-10-25
+
+### Fixed
+- **Self-healing reconciliation**: removed the "same context → do nothing" gate. The input method can
+  drift (manual toggles, a failed switch, typing Chinese inside code) and the old gate left it wrong
+  until the context changed. Every debounced caret event now reconciles the actual IME mode against
+  the context-derived target; `switchTo` internally no-ops when already correct.
+- Console editors are explicitly skipped (documented behavior was previously only implicit via empty
+  PSI); defensive clamping for zero-line documents (Python console `coerceIn` crash).
+
+### Changed
+- Hotkey retry pacing widened to 0/1.5s/3s/4.5s (4 attempts) covering Microsoft Pinyin's
+  short-interval Shift ignore window (observed 1.1–2.9 s).
+- `WriteIntentReadAction` wrapper for EDT PSI access (2026.2 threading assertions).
+
 ## [1.5.2] - 2026-10-23
 
 ### Added
