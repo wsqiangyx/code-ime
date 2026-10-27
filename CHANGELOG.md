@@ -3,6 +3,25 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.12] - 2026-10-27
+
+### Fixed
+- **String contexts now follow content（字符串跟随内容）**: entering a string with a non-CJK char
+  before the caret (quote, code) switches to English — strings mostly contain code content. CJK
+  continuation (typing Chinese inside a string) is still preserved. Code and string contexts now
+  share one consistent rule: follow the previous character.
+- Follow-manual override restored to context scope: a manual toggle inside a comment protects that
+  comment context for 30 s (typing English identifiers is legitimate), then auto resumes on context
+  change. Global scope locked out all switching (1.5.9 feedback).
+- Attribution by assumed-mode comparison instead of a time window: observed mode ≠ assumed mode →
+  definitely a manual toggle (no timing ambiguity). The 2.5 s window mis-attributed user toggles as
+  plugin actions, silently dropping the follow-manual override.
+
+### Changed
+- Console editors and other non-main editors (search popups, commit dialogs) are fully
+  user-controlled — the plugin never switches there.
+- Diagnostic logs at debug level (enable `CodeIME.Diag` in Debug Log Settings when troubleshooting).
+
 ## [1.5.5] - 2026-10-25
 
 ### Fixed

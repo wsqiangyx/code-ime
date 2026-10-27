@@ -77,11 +77,11 @@ class WindowsInputMethod : InputMethodController {
     override fun currentMode(): ImeMode? = callOnEdt { currentModeInternal() }
 
     override fun switchTo(target: ImeMode): SwitchResult {
-        if (!isAvailable()) { log.info("switchTo skip: unavailable"); return SwitchResult.FAILED }
+        if (!isAvailable()) { log.debug("switchTo skip: unavailable"); return SwitchResult.FAILED }
         val real = callOnEdt { currentModeInternal() }
         // 读不到真实状态时用虚拟状态判断"是否已处于目标模式"
         val current = real ?: assumedMode
-        log.info("switchTo target=$target real=$real assumed=$assumedMode")
+        log.debug("switchTo target=$target real=$real assumed=$assumedMode")
         if (current == target) return SwitchResult.NOOP
 
         // 读不到状态（新版 IDE 走 TSF，外部 ImmGetContext 返回 null）：
@@ -92,7 +92,7 @@ class WindowsInputMethod : InputMethodController {
 
         if (settings.useDirectImmSet && verifiable) {
             val directOk = callOnEdt { directSetInternal(target) }
-            log.info("directSet ok=$directOk")
+            log.debug("directSet ok=$directOk")
             if (directOk) {
                 lastSwitchAt = System.currentTimeMillis()
                 if (verifyOnEdt(target)) return SwitchResult.DIRECT
@@ -107,13 +107,13 @@ class WindowsInputMethod : InputMethodController {
         while (attempt < retryWaits.size && settings.hotkeyCode != 0) {
             sleepQuietly(retryWaits[attempt])
             val pressed = pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)
-            log.info("hotkey pressed attempt=$attempt ok=$pressed verifiable=$verifiable")
+            log.debug("hotkey pressed attempt=$attempt ok=$pressed verifiable=$verifiable")
             if (pressed) {
                 lastSwitchAt = System.currentTimeMillis()
                 assumedMode = target
                 if (!verifiable) {
                     // 无法回读（TSF 架构）：热键已发出即认为完成，不再重试
-                    log.info("switchTo UNVERIFIED (no IMM32 context) target=$target")
+                    log.debug("switchTo UNVERIFIED (no IMM32 context) target=$target")
                     return SwitchResult.HOTKEY
                 }
                 if (verifyOnEdt(target)) return SwitchResult.HOTKEY
@@ -121,7 +121,7 @@ class WindowsInputMethod : InputMethodController {
             attempt++
         }
 
-        log.info("switchTo FAILED target=$target")
+        log.debug("switchTo FAILED target=$target")
         return SwitchResult.FAILED
     }
 
@@ -135,7 +135,7 @@ class WindowsInputMethod : InputMethodController {
         if (himc == null) {
             // 拿不到 IME 上下文（无 IME 的窗口，如某些 DirectX/游戏/渲染窗口）。
             // 不能假设"是英文"——那会让插件永远尝试切中文并永远失败。
-            log.info("currentMode: HIMC=null (hwnd=${hwnd})")
+            log.debug("currentMode: HIMC=null (hwnd=${hwnd})")
             return null
         }
         try {
@@ -182,7 +182,7 @@ class WindowsInputMethod : InputMethodController {
         for (delay in VERIFY_POLL_DELAYS_MS) {
             sleepQuietly(delay.toLong())
             val mode = callOnEdt { currentModeInternal() }
-            log.info("verify mode=$mode want=$target after=${delay}ms")
+            log.debug("verify mode=$mode want=$target after=${delay}ms")
             if (mode == target) return true
         }
         return false
