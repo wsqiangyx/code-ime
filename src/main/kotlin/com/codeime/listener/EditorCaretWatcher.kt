@@ -310,6 +310,14 @@ class EditorCaretWatcher {
         )
         if (target == null) return
 
+        // 拼音组字保护：用户正在按字母键（很可能在打拼音，IME 开启未上屏）。
+        // 此时的光标事件可能来自组字窗口的插入，任何切换都会打断第一个字（1.5.6 实测）。
+        // 静默直到组字结束（空格/回车上屏、Esc 取消、退格清空、或 6 秒无输入）。
+        if (com.codeime.ime.KbdHookWatcher.isLetterTyping() && target == ImeMode.ENGLISH) {
+            log.debug("skip: letter typing (likely pinyin composing)")
+            return
+        }
+
         // 用户手动覆盖（全局）：有效期内不切到与用户手动选择相反的模式。
         // 字符一致性的接续目标（前字符是中文→保持中文）豁免——那正是用户打字意图的延续
         if (settings.respectManualToggles) {
