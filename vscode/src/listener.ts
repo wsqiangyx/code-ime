@@ -3,7 +3,7 @@ import { getConfig } from './config';
 import type { EditorContext } from './tm/types';
 import type { ImeAnalyzer } from './tm/analyzer';
 import { currentMode, lastPluginSwitchAt, switchTo, type ImeMode } from './ime/imm32';
-import { modeFromChar } from './char-mode';
+import { isComposingText, modeFromChar } from './char-mode';
 import type { StatusBarController } from './status';
 
 const DEBOUNCE_MS = 20;
@@ -75,10 +75,14 @@ export function registerListeners(
       lastEvaluatedCtx = ctx;
 
       // 语境默认目标；代码/字符串语境应用字符一致性（接续打字意图）
-      const prevChar =
-        offset > 0
-          ? doc.getText(new vscode.Range(doc.positionAt(offset - 1), doc.positionAt(offset)))
+      const charAt = (back: number) =>
+        offset - back >= 0
+          ? doc.getText(new vscode.Range(doc.positionAt(offset - back), doc.positionAt(offset - back + 1)))
           : '';
+      const prevChar = charAt(1);
+      const prev2Char = charAt(2);
+      // 组字保护：微软拼音组字中（"中zhong"）完全静默，任何切换都会打断中文输入
+      if (isComposingText(prevChar, prev2Char)) return;
       let target: ImeMode | null;
       let charConsistencyApplied = false;
       if (ctx === 'comment') {

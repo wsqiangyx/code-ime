@@ -207,10 +207,19 @@ class EditorCaretWatcher {
      * 中文字符/中文标点 → 中文；ASCII 字母 → fallback（英文）；数字/空格/符号 → null（不干预）。
      * 用于字符串语境（默认不干预）与代码语境（刚打完中文接续时不打断）。
      */
+    /**
+     * 字符一致性目标：跟随光标前一个字符的类型。
+     * 组字保护：微软拼音组字中（"中zhong" 这类 CJK+拼音字母混合）时返回 null——
+     * 此时输入法必然处于中文模式且正在编辑，任何切换都会打断打字（1.5.6 实测 bug）。
+     */
     private fun charConsistencyTarget(editor: Editor, fallback: ImeMode?): ImeMode? {
         val offset = editor.caretModel.offset
         if (offset <= 0) return null
-        return ImeMode.fromChar(editor.document.charsSequence[offset - 1]) ?: fallback
+        val seq = editor.document.charsSequence
+        val prev = seq[offset - 1]
+        val prev2 = if (offset >= 2) seq[offset - 2] else null
+        if (ImeMode.isComposingText(prev, prev2)) return null
+        return ImeMode.fromChar(prev) ?: fallback
     }
 
     private fun onCaretChanged(editor: Editor) {

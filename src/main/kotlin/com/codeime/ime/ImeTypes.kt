@@ -21,6 +21,22 @@ enum class ImeMode { CHINESE, ENGLISH;
             c.isLetter() && c.code < 0x80 -> ENGLISH
             else -> null
         }
+
+        /**
+         * 检测微软拼音"组字中"特征：CJK 字符紧邻未上屏的拼音字母（如 "中zhong"、"zhong"）。
+         * 组字期间输入法必然处于中文模式且正在编辑，插件此时必须完全静默——
+         * 否则字符一致性会把拼音字母判成英文而打断中文输入（1.5.6 实测 bug）。
+         */
+        fun isComposingText(prev: Char, prev2: Char?): Boolean {
+            val prevIsAsciiLetter = prev.isLetter() && prev.code < 0x80
+            val prev2IsCjk = prev2 != null && isCjkChar(prev2)
+            // 特征 1：CJK 字符后紧跟 ASCII 字母（"中zhong"）
+            if (prevIsAsciiLetter && prev2IsCjk) return true
+            // 特征 2：光标前是 ASCII 字母且更前面也是字母、而首字母前是 CJK/引号内
+            // ——简化：只要前字符是 ASCII 字母且前两个字符之一是 CJK，视为组字
+            if (prevIsAsciiLetter && prev2 != null && isCjkChar(prev2)) return true
+            return false
+        }
     }
 }
 

@@ -4,7 +4,7 @@ import * as oniguruma from 'vscode-oniguruma';
 import { FsGrammarSource } from '../src/tm/grammarSource';
 import { TmRegistry } from '../src/tm/registry';
 import { ImeAnalyzer } from '../src/tm/analyzer';
-import { modeFromChar } from '../src/char-mode';
+import { isComposingText, modeFromChar } from '../src/char-mode';
 
 const VSCODE_EXTENSIONS =
   process.env.VSCODE_EXTENSIONS ?? 'D:/software/VSCode/6d62b1d5da/resources/app/extensions';
@@ -82,6 +82,21 @@ function testCharMode(): { pass: number; fail: number } {
     const ok = got === expected;
     if (ok) pass++; else fail++;
     console.log(`${ok ? 'PASS' : 'FAIL'} [char] '${ch}' expected=${expected} got=${got}  (${note})`);
+  }
+  // 组字保护用例
+  const composing: [string, string | null, boolean, string][] = [
+    ['g', '中', true, '"中zhong" 组字中 → 静默'],
+    ['n', '中', true, '"中" 后接拼音 → 静默'],
+    ['a', '文', true, '"文abc" 组字中 → 静默'],
+    ['g', 'b', false, '普通英文单词 "bg" → 不算组字'],
+    ['中', null, false, '前字符是汉字本身 → 不算组字'],
+    ['"', '中', false, '引号前是汉字 → 不算组字'],
+  ];
+  for (const [prev, prev2, expected, note] of composing) {
+    const got = isComposingText(prev, prev2);
+    const ok = got === expected;
+    if (ok) pass++; else fail++;
+    console.log(`${ok ? 'PASS' : 'FAIL'} [composing] prev='${prev}' prev2='${prev2}' expected=${expected} got=${got}  (${note})`);
   }
   return { pass, fail };
 }

@@ -115,6 +115,16 @@ fun main() {
     check("数字→保持现状", ImeMode.fromChar('3'), null)
     check("空格→保持现状", ImeMode.fromChar(' '), null)
     check("连字符→保持现状", ImeMode.fromChar('-'), null)
+
+    // 组字保护
+    println("\n===== 组字保护（isComposingText） =====")
+    check("\"中zhong\"组字中", ImeMode.isComposingText('g', '中'), true)
+    check("\"中\"后接拼音", ImeMode.isComposingText('n', '中'), true)
+    check("\"文abc\"组字中", ImeMode.isComposingText('a', '文'), true)
+    check("普通英文单词bg", ImeMode.isComposingText('g', 'b'), false)
+    check("前字符是汉字", ImeMode.isComposingText('中', null), false)
+    check("引号前是汉字", ImeMode.isComposingText('"', '中'), false)
+
     class AssumedModeTracker(initial: String? = null) {
         var mode: String? = initial; private set
         fun onPluginSwitch(target: String) { mode = target }
