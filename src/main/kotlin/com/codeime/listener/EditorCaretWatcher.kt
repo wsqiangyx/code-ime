@@ -312,10 +312,9 @@ class EditorCaretWatcher {
             EditorContext.STRING -> if (settings.stringAsChinese) {
                 ImeMode.CHINESE
             } else {
-                // 字符一致性收窄：仅"前字符是中文→保持中文"这一接续介入，
-                // 其余（前字符是字母/数字/符号）一律静默——字符串本是不干预语境，
-                // 介入过多会在打中文途中被前一个英文字符误切（1.5.9 实测）
-                charConsistencyTarget(editor, fallback = null, cjkOnly = true)
+                // 字符一致性（跟随内容）：前字符是中文→保持中文接续；
+                // 其余（引号/代码/字母旁）→ 切英文——字符串里多数时候写的是代码内容
+                charConsistencyTarget(editor, fallback = ImeMode.ENGLISH, cjkOnly = false)
             }
             EditorContext.CODE -> {
                 // 代码区默认英文，但若前一个字符是中文（刚打完中文接续），保持中文不打断

@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.5.11"
+version = "1.5.12"
 
 repositories {
     mavenCentral()

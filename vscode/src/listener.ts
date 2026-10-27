@@ -92,8 +92,8 @@ export function registerListeners(
         if (cfg.stringAsChinese) {
           target = 'chinese';
         } else {
-          // 字符一致性收窄：仅"前字符是中文→保持中文"，其余静默（字符串本是不干预语境）
-          target = isCjkChar(prevChar) ? 'chinese' : null;
+          // 字符一致性（跟随内容）：前字符是中文→保持中文；其余→切英文
+          target = modeFromChar(prevChar) ?? 'english';
         }
       } else if (ctx === 'code') {
         target = modeFromChar(prevChar) ?? 'english';
