@@ -45,6 +45,12 @@ class EditorCaretWatcher {
     @Volatile private var lastFailedAt = 0L
     @Volatile private var consecutiveFailures = 0
 
+    // 跟手覆盖（全局）：用户在任何地方手动切换后，有效期内全局让位。
+    // 之所以是全局而非按编辑器：搜索框/提交对话框等临时编辑器没有持续状态，
+    // 且用户意图（“我现在要用英文/中文打字”）天然跨越编辑器边界
+    @Volatile private var userOverrideMode: ImeMode? = null
+    @Volatile private var userOverrideAt = 0L
+
     // 切换请求代次：方向键快速连穿多个上下文时，只执行最后一次的切换请求
     private val switchGeneration = AtomicLong(0)
 
@@ -131,24 +137,17 @@ class EditorCaretWatcher {
     }
 
     /**
-     * 用户手动切换了输入法（由 ImeModePoller 归因后调用，EDT 上执行）：
-     * 在当前光标语境记住用户的选择，自动切换在有效期内不再与用户抢。
+     * 用户手动切换了输入法（由 KbdHookWatcher 检测到物理 Shift 按下后调用）：
+     * 记录全局覆盖——有效期内所有编辑器（含搜索框/对话框）都不与用户抢。
      */
     fun recordUserOverride(mode: ImeMode) {
         if (!CodeImeSettings.getInstance().state.respectManualToggles) return
-        val projects = com.intellij.openapi.project.ProjectManager.getInstanceIfCreated()?.openProjects
-        val editor = projects
-            ?.firstNotNullOfOrNull { p ->
-                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(p).selectedTextEditor
-            } ?: return
-        val state = stateFor(editor)
-        state.userOverride = mode
-        state.userOverrideAt = System.currentTimeMillis()
-        state.userOverrideContext = state.lastContext
+        userOverrideMode = mode
+        userOverrideAt = System.currentTimeMillis()
         // 同步假定模式：TSF 架构下 IMM32 读不到真实状态，虚拟状态必须跟随用户动作
         (InputMethodManager.instance as? com.codeime.ime.WindowsInputMethod)
             ?.syncAssumedMode(mode)
-        log.debug("user override recorded: mode=$mode ctx=${state.lastContext}")
+        log.debug("user override recorded (global): mode=$mode")
     }
 
     /**
@@ -230,10 +229,13 @@ class EditorCaretWatcher {
         val app = ApplicationManager.getApplication() ?: return
         if (!app.isActive()) { log.debug("evaluate skip: app inactive"); return }
         if (editor.isDisposed) { log.debug("evaluate skip: editor disposed"); return }
-        // 控制台/终端等非普通编辑器不切换（文档可能为空、行数异常，也避免打扰 REPL 输入）
-        if (editor.editorKind == com.intellij.openapi.editor.EditorKind.CONSOLE) {
-            log.debug("evaluate skip: console editor")
-            return
+        // 只在主编辑器切换。搜索框、提交对话框、弹窗等（UNTYPED）与控制台（CONSOLE）
+        // 完全交给用户掌控——这些地方用户意图明确，插件抢输入法只会帮倒忙（1.5.4 用户反馈）
+        when (editor.editorKind) {
+            com.intellij.openapi.editor.EditorKind.MAIN_EDITOR -> { /* 主编辑区：正常判定 */ }
+            com.intellij.openapi.editor.EditorKind.CONSOLE ->
+                { log.debug("evaluate skip: console editor"); return }
+            else -> { log.debug("evaluate skip: editor kind=${editor.editorKind}"); return }
         }
         if (editor.selectionModel.hasSelection()) { log.debug("evaluate skip: selection"); return }
         // 设置弹窗/对话框抢焦点时不切换，避免模拟按键打进别的界面。
@@ -284,14 +286,13 @@ class EditorCaretWatcher {
         )
         if (target == null) return
 
-        // 用户手动覆盖：有效期内不与用户抢输入法（同语境或语境未知时生效）
+        // 用户手动覆盖（全局）：有效期内不与用户抢输入法
         if (settings.respectManualToggles) {
-            val o = state.userOverride
+            val o = userOverrideMode
             if (o != null && o != target &&
-                System.currentTimeMillis() - state.userOverrideAt < USER_OVERRIDE_TTL_MS &&
-                (state.userOverrideContext == null || state.userOverrideContext == effective)
+                System.currentTimeMillis() - userOverrideAt < USER_OVERRIDE_TTL_MS
             ) {
-                log.debug("skip: user override mode=$o ctx=$effective")
+                log.debug("skip: user override (global) mode=$o ctx=$effective")
                 return
             }
         }
@@ -347,11 +348,6 @@ class EditorCaretWatcher {
     private class EditorState {
         var timer: Timer? = null
         var lastContext: EditorContext? = null
-
-        // 用户手动切换覆盖：在有效期内同语境不强制切换
-        var userOverride: ImeMode? = null
-        var userOverrideAt = 0L
-        var userOverrideContext: EditorContext? = null
     }
 
     private fun appDisposable() = Disposer.newDisposable().also {

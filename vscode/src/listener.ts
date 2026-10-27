@@ -27,7 +27,6 @@ export function registerListeners(
   // 手动切换覆盖：检测到用户手动切换后，同语境 60 秒内不强制切换（跟手机制）
   let overrideMode: ImeMode | null = null;
   let overrideAt = 0;
-  let overrideCtx: EditorContext | null = null;
   let lastEvaluatedCtx: EditorContext | null = null;
 
   const isSupported = (editor: vscode.TextEditor) =>
@@ -59,12 +58,15 @@ export function registerListeners(
       const doc = editor.document;
       const offset = doc.offsetAt(editor.selection.active);
 
-      // SCM 提交输入框整体按注释（中文）处理，等同 IDEA 版的 COMMIT_EDITMSG
+      // 只在常规文件编辑器切换。SCM 提交输入框按中文处理（等同 IDEA 版的 COMMIT_EDITMSG）；
+      // 输出面板、搜索框等非常规文档不碰——用户意图明确，插件抢输入法只会帮倒忙
       let ctx: EditorContext;
       if (doc.uri.scheme === 'vscode-scm') {
         ctx = 'comment';
-      } else {
+      } else if (SUPPORTED_SCHEMES.has(doc.uri.scheme)) {
         ctx = await analyzer.classify(doc.languageId, doc, offset);
+      } else {
+        return; // 输出面板、扩展自定义编辑器等：完全交给用户
       }
 
       // 语境跟踪必须始终更新：即使当前语境"不干预"（如默认的字符串）。
@@ -86,9 +88,9 @@ export function registerListeners(
               : null;
       if (!target) return;
 
-      // 手动切换覆盖：有效期内同语境不与用户抢输入法
+      // 手动切换覆盖（全局）：有效期内所有编辑器都不与用户抢输入法
       if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
-          Date.now() - overrideAt < 60000 && (overrideCtx === null || overrideCtx === ctx)) {
+          Date.now() - overrideAt < 60000) {
         return;
       }
 
@@ -174,7 +176,6 @@ export function registerListeners(
     if (sincePlugin < 0 || sincePlugin > 2500) {
       overrideMode = m;
       overrideAt = Date.now();
-      overrideCtx = lastEvaluatedCtx;
       status.update(m);
     }
   }, 250);

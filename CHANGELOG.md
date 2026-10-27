@@ -3,6 +3,18 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.5] - 2026-10-25
+
+### Fixed
+- **No more fighting in search boxes and commit dialogs（搜索框/提交对话框不再抢输入法）**: these are
+  separate `Editor` instances (kind `UNTYPED`) that the caret listener also attached to, so the plugin
+  kept force-switching inside them. Now only `MAIN_EDITOR` triggers auto switching — search popups,
+  commit dialogs, and other transient editors are fully user-controlled (consoles were already
+  skipped).
+- **Follow-manual override is now global**: previously stored per-editor, so a manual toggle inside a
+  dialog never protected the main editor (and vice versa). User intent ("I'm typing English now")
+  naturally crosses editor boundaries; the override now applies everywhere for 60 s.
+
 ## [1.5.4] - 2026-10-25
 
 ### Fixed
