@@ -45,11 +45,12 @@ class EditorCaretWatcher {
     @Volatile private var lastFailedAt = 0L
     @Volatile private var consecutiveFailures = 0
 
-    // 跟手覆盖（全局）：用户在任何地方手动切换后，有效期内全局让位。
-    // 之所以是全局而非按编辑器：搜索框/提交对话框等临时编辑器没有持续状态，
-    // 且用户意图（“我现在要用英文/中文打字”）天然跨越编辑器边界
+    // 跟手覆盖：用户手动切换后，有效期内同语境让位（语境=null 表示短暂全局让位）。
+    // 用户意图（“我现在要用英文打字”）以当前所在位置为准；语境变化（移出注释又移入）
+    // 后自动恢复——既保护注释里切英文写标识符的需求，又不锁死其他语境的自动切换
     @Volatile private var userOverrideMode: ImeMode? = null
     @Volatile private var userOverrideAt = 0L
+    @Volatile private var userOverrideContext: EditorContext? = null
 
     // 切换请求代次：方向键快速连穿多个上下文时，只执行最后一次的切换请求
     private val switchGeneration = AtomicLong(0)
@@ -138,16 +139,36 @@ class EditorCaretWatcher {
 
     /**
      * 用户手动切换了输入法（由 KbdHookWatcher 检测到物理 Shift 按下后调用）：
-     * 记录全局覆盖——有效期内所有编辑器（含搜索框/对话框）都不与用户抢。
+     * 记录覆盖（语境级：发生在哪个语境就保护哪个语境；在对话框/搜索框里发生时
+     * 记 null = 短暂全局让位）。有效期内同语境不与用户抢——注释里切英文写标识符
+     * 是正当需求，插件不得抢回中文。
      */
     fun recordUserOverride(mode: ImeMode) {
         if (!CodeImeSettings.getInstance().state.respectManualToggles) return
         userOverrideMode = mode
         userOverrideAt = System.currentTimeMillis()
+        // 记录发生时的语境：取当前焦点主编辑器的判定语境；
+        // 拿不到（对话框/搜索框）则记 null = 短暂全局让位
+        userOverrideContext = currentFocusedContext()
         // 同步假定模式：TSF 架构下 IMM32 读不到真实状态，虚拟状态必须跟随用户动作
         (InputMethodManager.instance as? com.codeime.ime.WindowsInputMethod)
             ?.syncAssumedMode(mode)
-        log.info("user override recorded (global): mode=$mode")
+        log.debug("user override recorded: mode=$mode ctx=$userOverrideContext")
+    }
+
+    /** 当前焦点主编辑器的语境（快速判定：光标前字符 / 行首特征），拿不到返回 null */
+    private fun currentFocusedContext(): EditorContext? {
+        val projects = com.intellij.openapi.project.ProjectManager.getInstanceIfCreated()?.openProjects
+        val editor = projects
+            ?.firstNotNullOfOrNull { p ->
+                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(p).selectedTextEditor
+            } ?: return null
+        val project = editor.project ?: return null
+        return runCatching {
+            com.intellij.openapi.application.WriteIntentReadAction.compute<EditorContext> {
+                ContextAnalyzer.analyze(editor, project)
+            }
+        }.getOrNull()
     }
 
     /**
@@ -321,16 +342,18 @@ class EditorCaretWatcher {
             return
         }
 
-        // 用户手动覆盖：有效期内不切到与用户手动选择相反的模式。
-        // 例外：进入注释（target=CHINESE）不受覆盖约束——注释必须中文是最高优先级规则，
-        // 否则用户在代码区手动切英文后写注释，标点全部变半角（1.5.9 实测：1.2\ 应为 1.2、）。
-        // 窗口 30 秒（60 秒会让用户感觉"插件失灵不切换了"——1.5.9 实测反馈）
-        if (settings.respectManualToggles && target != ImeMode.CHINESE) {
+        // 用户手动覆盖：有效期内不切到与用户手动选择相反的模式——注释里也不例外
+        // （用户在注释里主动切英文写标识符是正当需求，插件不得抢回中文）。
+        // 语境级作用域：覆盖记录"发生时的语境"，语境变了（移出注释又移入等）自动恢复——
+        // 避免 1.5.9 全局覆盖锁死一切切换的问题；字符串的误切已由 cjkOnly 收窄解决。
+        // 窗口 30 秒。
+        if (settings.respectManualToggles) {
             val o = userOverrideMode
             if (o != null && o != target &&
-                System.currentTimeMillis() - userOverrideAt < USER_OVERRIDE_TTL_MS
+                System.currentTimeMillis() - userOverrideAt < USER_OVERRIDE_TTL_MS &&
+                (userOverrideContext == null || userOverrideContext == effective)
             ) {
-                log.debug("skip: user override (global) mode=$o ctx=$effective")
+                log.debug("skip: user override mode=$o ctx=$effective")
                 return
             }
         }

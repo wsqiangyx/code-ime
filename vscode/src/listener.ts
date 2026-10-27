@@ -27,6 +27,8 @@ export function registerListeners(
   // 手动切换覆盖：检测到用户手动切换后，同语境 60 秒内不强制切换（跟手机制）
   let overrideMode: ImeMode | null = null;
   let overrideAt = 0;
+  // 覆盖发生时的语境（null = 对话框/搜索框里切的，短暂全局让位）
+  let overrideCtx: EditorContext | null = null;
   let lastEvaluatedCtx: EditorContext | null = null;
 
   const isSupported = (editor: vscode.TextEditor) =>
@@ -100,11 +102,12 @@ export function registerListeners(
       }
       if (!target) return;
 
-      // 手动切换覆盖：有效期内不切到与用户手动选择相反的模式。
-      // 例外：进注释（chinese）不受覆盖约束——注释必须中文是最高优先级规则。
+      // 手动切换覆盖（语境级）：有效期内同语境不切到与用户手动选择相反的模式——
+      // 注释里切英文写标识符是正当需求，插件不得抢回中文；
+      // 语境变化（移出又移入）后自动恢复。覆盖记录为 null（对话框里切的）则短暂全局让位。
       // 窗口 30 秒（60 秒会让用户感觉"插件失灵不切换了"）
-      if (cfg.respectManualToggles && target !== 'chinese' && overrideMode && overrideMode !== target &&
-          Date.now() - overrideAt < 30000) {
+      if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
+          Date.now() - overrideAt < 30000 && (overrideCtx === null || overrideCtx === ctx)) {
         return;
       }
 
@@ -194,6 +197,7 @@ export function registerListeners(
     } else {
       overrideMode = m;
       overrideAt = Date.now();
+      overrideCtx = lastEvaluatedCtx; // 记录发生时的语境（null=非编辑器语境，全局让位）
       status.update(m);
     }
   }, 250);
