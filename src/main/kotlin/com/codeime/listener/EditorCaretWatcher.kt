@@ -209,17 +209,24 @@ class EditorCaretWatcher {
      */
     /**
      * 字符一致性目标：跟随光标前一个字符的类型。
-     * 组字保护：微软拼音组字中（"中zhong" 这类 CJK+拼音字母混合）时返回 null——
-     * 此时输入法必然处于中文模式且正在编辑，任何切换都会打断打字（1.5.6 实测 bug）。
+     * cjkOnly=true（字符串语境）：仅 CJK 前字符返回中文，其余一律 null（静默）。
+     * cjkOnly=false（代码语境）：CJK → 中文（接续）；ASCII 字母 → fallback（默认英文）；
+     * 数字/空格/符号 → null。
+     * 组字保护：微软拼音组字中（"中zhong"）返回 null——此时必须完全静默。
      */
-    private fun charConsistencyTarget(editor: Editor, fallback: ImeMode?): ImeMode? {
+    private fun charConsistencyTarget(editor: Editor, fallback: ImeMode?, cjkOnly: Boolean): ImeMode? {
         val offset = editor.caretModel.offset
         if (offset <= 0) return null
         val seq = editor.document.charsSequence
         val prev = seq[offset - 1]
         val prev2 = if (offset >= 2) seq[offset - 2] else null
         if (ImeMode.isComposingText(prev, prev2)) return null
-        return ImeMode.fromChar(prev) ?: fallback
+        val fromChar = ImeMode.fromChar(prev)
+        return when {
+            fromChar == ImeMode.CHINESE -> ImeMode.CHINESE
+            cjkOnly -> null
+            else -> fromChar ?: fallback
+        }
     }
 
     private fun onCaretChanged(editor: Editor) {
@@ -284,11 +291,14 @@ class EditorCaretWatcher {
             EditorContext.STRING -> if (settings.stringAsChinese) {
                 ImeMode.CHINESE
             } else {
-                charConsistencyTarget(editor, fallback = null)
+                // 字符一致性收窄：仅"前字符是中文→保持中文"这一接续介入，
+                // 其余（前字符是字母/数字/符号）一律静默——字符串本是不干预语境，
+                // 介入过多会在打中文途中被前一个英文字符误切（1.5.9 实测）
+                charConsistencyTarget(editor, fallback = null, cjkOnly = true)
             }
             EditorContext.CODE -> {
                 // 代码区默认英文，但若前一个字符是中文（刚打完中文接续），保持中文不打断
-                charConsistencyTarget(editor, fallback = ImeMode.ENGLISH)
+                charConsistencyTarget(editor, fallback = ImeMode.ENGLISH, cjkOnly = false)
             }
             EditorContext.UNKNOWN -> null
         }
@@ -311,14 +321,16 @@ class EditorCaretWatcher {
             return
         }
 
-        // 用户手动覆盖（全局）：有效期内不切到与用户手动选择相反的模式。
-        // 无豁免——1.5.8 日志证实豁免会让误切穿过覆盖（"字符串里手动切中文仍被切英文"）
-        if (settings.respectManualToggles) {
+        // 用户手动覆盖：有效期内不切到与用户手动选择相反的模式。
+        // 例外：进入注释（target=CHINESE）不受覆盖约束——注释必须中文是最高优先级规则，
+        // 否则用户在代码区手动切英文后写注释，标点全部变半角（1.5.9 实测：1.2\ 应为 1.2、）。
+        // 窗口 30 秒（60 秒会让用户感觉"插件失灵不切换了"——1.5.9 实测反馈）
+        if (settings.respectManualToggles && target != ImeMode.CHINESE) {
             val o = userOverrideMode
             if (o != null && o != target &&
                 System.currentTimeMillis() - userOverrideAt < USER_OVERRIDE_TTL_MS
             ) {
-                log.info("skip: user override (global) mode=$o ctx=$effective")
+                log.debug("skip: user override (global) mode=$o ctx=$effective")
                 return
             }
         }
@@ -389,6 +401,6 @@ class EditorCaretWatcher {
         private const val FAILURE_COOLDOWN_MS = 1500
 
         /** 手动切换覆盖的有效期：期内同语境不强制切换 */
-        private const val USER_OVERRIDE_TTL_MS = 60_000L
+        private const val USER_OVERRIDE_TTL_MS = 30_000L
     }
 }

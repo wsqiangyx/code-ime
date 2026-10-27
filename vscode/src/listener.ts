@@ -3,7 +3,7 @@ import { getConfig } from './config';
 import type { EditorContext } from './tm/types';
 import type { ImeAnalyzer } from './tm/analyzer';
 import { currentMode, assumedMode, syncAssumedMode, switchTo, type ImeMode } from './ime/imm32';
-import { isComposingText, modeFromChar } from './char-mode';
+import { isCjkChar, isComposingText, modeFromChar } from './char-mode';
 import type { StatusBarController } from './status';
 
 const DEBOUNCE_MS = 20;
@@ -90,7 +90,8 @@ export function registerListeners(
         if (cfg.stringAsChinese) {
           target = 'chinese';
         } else {
-          target = modeFromChar(prevChar);
+          // 字符一致性收窄：仅"前字符是中文→保持中文"，其余静默（字符串本是不干预语境）
+          target = isCjkChar(prevChar) ? 'chinese' : null;
         }
       } else if (ctx === 'code') {
         target = modeFromChar(prevChar) ?? 'english';
@@ -99,10 +100,11 @@ export function registerListeners(
       }
       if (!target) return;
 
-      // 手动切换覆盖（全局）：有效期内不切到与用户手动选择相反的模式。
-      // 无豁免——1.5.8 日志证实豁免会让误切穿过覆盖（"字符串里手动切中文仍被切英文"）
-      if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
-          Date.now() - overrideAt < 60000) {
+      // 手动切换覆盖：有效期内不切到与用户手动选择相反的模式。
+      // 例外：进注释（chinese）不受覆盖约束——注释必须中文是最高优先级规则。
+      // 窗口 30 秒（60 秒会让用户感觉"插件失灵不切换了"）
+      if (cfg.respectManualToggles && target !== 'chinese' && overrideMode && overrideMode !== target &&
+          Date.now() - overrideAt < 30000) {
         return;
       }
 
