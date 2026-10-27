@@ -51,13 +51,19 @@ class ImeModePoller {
         }
         if (mode == lastKnown) return
 
-        val sincePlugin = System.currentTimeMillis() - InputMethodManager.instance.lastPluginSwitchAt()
-        val attributedToPlugin = sincePlugin in 0..PLUGIN_ATTRIBUTION_MS
+        // 归因：观察到的模式 == 插件的假定模式 → 是插件注入生效的；
+        // 不等 → 一定是用户手动切的（无论距插件上次注入多久）。
+        // 旧的时间窗口归因（2.5s）有严重误判：用户在插件注入后 2.5s 内手动切换，
+        // 会被当成"插件自己干的"，跟手覆盖不记录 → 插件随后与用户抢输入法（1.5.8 实测）。
+        val wm = InputMethodManager.instance as? WindowsInputMethod
+        val assumed = wm?.assumedMode()
+        val attributedToPlugin = (assumed == null || assumed == mode)
         lastKnown = mode
         if (attributedToPlugin) {
-            log.debug("mode change -> plugin (since=$sincePlugin mode=$mode)")
+            if (wm != null) wm.syncAssumedMode(mode) // 插件生效，虚拟状态对齐真实
+            log.info("mode change -> plugin (observed=$mode assumed=$assumed)")
         } else {
-            log.debug("mode change -> user (since=$sincePlugin mode=$mode)")
+            log.info("mode change -> user (observed=$mode assumed=$assumed)")
             ApplicationManager.getApplication().invokeLater {
                 ApplicationManager.getApplication()
                     ?.getService(EditorCaretWatcher::class.java)
@@ -72,8 +78,5 @@ class ImeModePoller {
 
     companion object {
         private const val POLL_MS = 250L
-
-        /** 插件注入后该窗口内的模式变化归因给插件（含校验轮询与自适应重试的时间跨度） */
-        private const val PLUGIN_ATTRIBUTION_MS = 2500L
     }
 }

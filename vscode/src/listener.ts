@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { getConfig } from './config';
 import type { EditorContext } from './tm/types';
 import type { ImeAnalyzer } from './tm/analyzer';
-import { currentMode, lastPluginSwitchAt, switchTo, type ImeMode } from './ime/imm32';
+import { currentMode, assumedMode, syncAssumedMode, switchTo, type ImeMode } from './ime/imm32';
 import { isComposingText, modeFromChar } from './char-mode';
 import type { StatusBarController } from './status';
 
@@ -84,7 +84,6 @@ export function registerListeners(
       // 组字保护：微软拼音组字中（"中zhong"）完全静默，任何切换都会打断中文输入
       if (isComposingText(prevChar, prev2Char)) return;
       let target: ImeMode | null;
-      let charConsistencyApplied = false;
       if (ctx === 'comment') {
         target = 'chinese';
       } else if (ctx === 'string') {
@@ -92,21 +91,18 @@ export function registerListeners(
           target = 'chinese';
         } else {
           target = modeFromChar(prevChar);
-          charConsistencyApplied = target !== null;
         }
       } else if (ctx === 'code') {
         target = modeFromChar(prevChar) ?? 'english';
-        // 仅"保持中文"是接续（前字符是英文时切英文就是默认行为，不算接续豁免）
-        charConsistencyApplied = target === 'chinese';
       } else {
         target = null;
       }
       if (!target) return;
 
       // 手动切换覆盖（全局）：有效期内不切到与用户手动选择相反的模式。
-      // 字符一致性的接续目标豁免——那正是用户打字意图的延续
+      // 无豁免——1.5.8 日志证实豁免会让误切穿过覆盖（"字符串里手动切中文仍被切英文"）
       if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
-          !charConsistencyApplied && Date.now() - overrideAt < 60000) {
+          Date.now() - overrideAt < 60000) {
         return;
       }
 
@@ -174,7 +170,9 @@ export function registerListeners(
     }),
   );
 
-  // 模式轮询（250ms）：把输入法模式变化归因给插件或用户，用户变化记录为手动覆盖
+  // 模式轮询（250ms）：归因用假定模式——观察到的模式 != 插件假定模式 → 用户手动切换。
+  // 旧的时间窗口归因（2.5s）会误判：用户在插件注入后 2.5s 内手动切换被当成插件所为，
+  // 跟手覆盖不记录 → 插件随后与用户抢输入法
   let lastKnownMode: ImeMode | null = null;
   let pollerInitialized = false;
   const modeTimer = setInterval(() => {
@@ -187,9 +185,11 @@ export function registerListeners(
       return;
     }
     if (m === lastKnownMode) return;
-    const sincePlugin = Date.now() - lastPluginSwitchAt();
+    const assumed = assumedMode();
     lastKnownMode = m;
-    if (sincePlugin < 0 || sincePlugin > 2500) {
+    if (assumed === null || assumed === m) {
+      syncAssumedMode(m); // 插件生效，虚拟状态对齐真实
+    } else {
       overrideMode = m;
       overrideAt = Date.now();
       status.update(m);

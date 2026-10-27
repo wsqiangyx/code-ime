@@ -166,11 +166,21 @@ let lastHotkeyAt = 0;
 let lastSwitchAt = Date.now();
 // 假定模式：读不到真实状态（TSF 架构）时用插件自己的切换意图跟踪，
 // 避免每次光标事件都盲发热键（连续两次会把中英抵消）
-let assumedMode: 'chinese' | 'english' | null = null;
+let assumedModeVar: 'chinese' | 'english' | null = null;
 
 /** 插件最近一次切换尝试的时间戳（手动切换跟手机制的归因依据） */
 export function lastPluginSwitchAt(): number {
   return lastSwitchAt;
+}
+
+/** 当前假定模式（归因用：观察到的模式 != 假定模式 → 用户手动切换） */
+export function assumedMode(): ImeMode | null {
+  return assumedModeVar;
+}
+
+/** 同步假定模式（插件注入生效后，虚拟状态对齐真实状态） */
+export function syncAssumedMode(mode: ImeMode): void {
+  assumedModeVar = mode;
 }
 
 function isKeyHeld(vk: number): boolean {
@@ -218,11 +228,11 @@ export async function switchTo(
   if (!ready) return 'failed';
   const real = currentMode();
   // 读不到真实状态（TSF 架构）时用假定模式判断"是否已处于目标模式"
-  const current = real ?? assumedMode;
+  const current = real ?? assumedModeVar;
   if (current === target) return 'noop';
 
   if (useDirect && directSet(target)) {
-    assumedMode = target;
+    assumedModeVar = target;
     if (await verify(target)) return 'direct';
   }
 
@@ -237,7 +247,7 @@ export async function switchTo(
       await sleep(retryWaits[attempt]);
       const pressed = await pressHotkey(key, mods);
       if (pressed) {
-        assumedMode = target;
+        assumedModeVar = target;
         if (await verify(target)) return 'hotkey';
       }
     }

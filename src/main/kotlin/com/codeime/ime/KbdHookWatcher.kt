@@ -120,7 +120,7 @@ class KbdHookWatcher {
                             }
                             vkCode == VK_SHIFT && isUp -> {
                                 if (shiftDown && !otherKeyPressed) {
-                                    log.debug("kbd hook: manual Shift toggle detected")
+                                    log.info("kbd hook: manual Shift toggle detected")
                                     onManualToggle()
                                 }
                                 shiftDown = false
@@ -158,7 +158,7 @@ class KbdHookWatcher {
                 }
                 hookHandle = hook
                 val tid = u32.GetCurrentThreadId()
-                log.debug("kbd hook installed, tid=$tid")
+                log.info("kbd hook installed, tid=$tid")
 
                 // 消息泵（低级钩子的必要条件）
                 val msgBuf = Memory(48)
@@ -166,7 +166,7 @@ class KbdHookWatcher {
                     // 只需泵消息
                 }
                 u32.UnhookWindowsHookEx(hook)
-                log.debug("kbd hook removed")
+                log.info("kbd hook removed")
             } catch (t: Throwable) {
                 log.warn("CodeIME: 键盘钩子线程异常", t)
             }
