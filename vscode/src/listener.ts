@@ -74,23 +74,35 @@ export function registerListeners(
       lastContext.set(editor, ctx);
       lastEvaluatedCtx = ctx;
 
-      const target: ImeMode | null =
-        ctx === 'comment'
-          ? 'chinese'
-          : ctx === 'string'
-            ? cfg.stringAsChinese
-              ? 'chinese'
-              : offset > 0
-                ? modeFromChar(doc.getText(new vscode.Range(doc.positionAt(offset - 1), doc.positionAt(offset))))
-                : null
-            : ctx === 'code'
-              ? 'english'
-              : null;
+      // 语境默认目标；代码/字符串语境应用字符一致性（接续打字意图）
+      const prevChar =
+        offset > 0
+          ? doc.getText(new vscode.Range(doc.positionAt(offset - 1), doc.positionAt(offset)))
+          : '';
+      let target: ImeMode | null;
+      let charConsistencyApplied = false;
+      if (ctx === 'comment') {
+        target = 'chinese';
+      } else if (ctx === 'string') {
+        if (cfg.stringAsChinese) {
+          target = 'chinese';
+        } else {
+          target = modeFromChar(prevChar);
+          charConsistencyApplied = target !== null;
+        }
+      } else if (ctx === 'code') {
+        target = modeFromChar(prevChar) ?? 'english';
+        // 仅"保持中文"是接续（前字符是英文时切英文就是默认行为，不算接续豁免）
+        charConsistencyApplied = target === 'chinese';
+      } else {
+        target = null;
+      }
       if (!target) return;
 
-      // 手动切换覆盖（全局）：有效期内所有编辑器都不与用户抢输入法
+      // 手动切换覆盖（全局）：有效期内不切到与用户手动选择相反的模式。
+      // 字符一致性的接续目标豁免——那正是用户打字意图的延续
       if (cfg.respectManualToggles && overrideMode && overrideMode !== target &&
-          Date.now() - overrideAt < 60000) {
+          !charConsistencyApplied && Date.now() - overrideAt < 60000) {
         return;
       }
 

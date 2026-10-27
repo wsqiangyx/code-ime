@@ -202,6 +202,17 @@ class EditorCaretWatcher {
         return false
     }
 
+    /**
+     * 字符一致性目标：跟随光标前一个字符的类型。
+     * 中文字符/中文标点 → 中文；ASCII 字母 → fallback（英文）；数字/空格/符号 → null（不干预）。
+     * 用于字符串语境（默认不干预）与代码语境（刚打完中文接续时不打断）。
+     */
+    private fun charConsistencyTarget(editor: Editor, fallback: ImeMode?): ImeMode? {
+        val offset = editor.caretModel.offset
+        if (offset <= 0) return null
+        return ImeMode.fromChar(editor.document.charsSequence[offset - 1]) ?: fallback
+    }
+
     private fun onCaretChanged(editor: Editor) {
         if (!CodeImeSettings.getInstance().state.enabled) return
         val project = editor.project ?: return
@@ -259,21 +270,25 @@ class EditorCaretWatcher {
             context
         }
 
-        val target = when (effective) {
+        var target = when (effective) {
             EditorContext.COMMENT -> ImeMode.CHINESE
             EditorContext.STRING -> if (settings.stringAsChinese) {
                 ImeMode.CHINESE
             } else {
-                // 字符一致性：跟随光标前一个字符的类型（中文字符→中文，英文字母→英文）
-                val offset = editor.caretModel.offset
-                if (offset > 0) {
-                    ImeMode.fromChar(editor.document.charsSequence[offset - 1])
-                } else {
-                    null
-                }
+                charConsistencyTarget(editor, fallback = null)
             }
-            EditorContext.CODE -> ImeMode.ENGLISH
+            EditorContext.CODE -> {
+                // 代码区默认英文，但若前一个字符是中文（刚打完中文接续），保持中文不打断
+                charConsistencyTarget(editor, fallback = ImeMode.ENGLISH)
+            }
             EditorContext.UNKNOWN -> null
+        }
+        // 字符一致性是否参与（用于跟手覆盖豁免：接续打字是用户意图的延续）
+        val charConsistencyApplied = target != null && when (effective) {
+            EditorContext.COMMENT -> false
+            EditorContext.STRING -> !settings.stringAsChinese
+            EditorContext.CODE -> target == ImeMode.CHINESE // 仅“保持中文”是接续
+            EditorContext.UNKNOWN -> false
         }
         val state = stateFor(editor)
         val prevContext = state.lastContext
@@ -286,10 +301,11 @@ class EditorCaretWatcher {
         )
         if (target == null) return
 
-        // 用户手动覆盖（全局）：有效期内不与用户抢输入法
+        // 用户手动覆盖（全局）：有效期内不切到与用户手动选择相反的模式。
+        // 字符一致性的接续目标（前字符是中文→保持中文）豁免——那正是用户打字意图的延续
         if (settings.respectManualToggles) {
             val o = userOverrideMode
-            if (o != null && o != target &&
+            if (o != null && o != target && !charConsistencyApplied &&
                 System.currentTimeMillis() - userOverrideAt < USER_OVERRIDE_TTL_MS
             ) {
                 log.debug("skip: user override (global) mode=$o ctx=$effective")
