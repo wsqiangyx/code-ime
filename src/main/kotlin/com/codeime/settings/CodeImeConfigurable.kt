@@ -40,7 +40,7 @@ class CodeImeConfigurable : Configurable {
                     checkBox("字符串内视为中文（默认不干预）").also { stringBox = it.component }
                 }
                 row {
-                    checkBox("优先直接设置输入法状态（关闭后优先模拟热键；微软拼音建议关闭）")
+                    checkBox("优先直接设置输入法状态（推荐开启：零延迟，失败自动降级为模拟热键）")
                         .also { directBox = it.component }
                 }
                 row {

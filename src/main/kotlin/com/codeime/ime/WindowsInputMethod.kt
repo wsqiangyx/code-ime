@@ -36,6 +36,12 @@ class WindowsInputMethod : InputMethodController {
     @Volatile private var lastSwitchAt = System.currentTimeMillis()
 
     /**
+     * 直接设置路径的会话级记忆：null=未尝试；true=有效（优先走，零延迟）；
+     * false=调用成功但状态不变（此环境不支持，本会话跳过）。
+     */
+    @Volatile private var directSetWorked: Boolean? = null
+
+    /**
      * 虚拟模式：当 IMM32 读不到真实状态时（新版 IDE 走 TSF），
      * 用插件自己最后一次切换的意图作为"当前模式"，
      * 避免每次判定都盲发 Shift（连续两次会把中英抵消）。
@@ -90,12 +96,23 @@ class WindowsInputMethod : InputMethodController {
 
         val settings = CodeImeSettings.getInstance().state
 
-        if (settings.useDirectImmSet && verifiable) {
+        // 路径记忆：直接设置（零延迟）成功过就优先走；本会话内 sticky。
+        // 开关关闭时视为"用户明确要求热键"，不尝试直接设置。
+        val directViable = settings.useDirectImmSet && verifiable &&
+            directSetWorked != false
+
+        if (directViable) {
             val directOk = callOnEdt { directSetInternal(target) }
             log.debug("directSet ok=$directOk")
             if (directOk) {
                 lastSwitchAt = System.currentTimeMillis()
-                if (verifyOnEdt(target)) return SwitchResult.DIRECT
+                assumedMode = target
+                if (verifyOnEdt(target)) {
+                    directSetWorked = true
+                    return SwitchResult.DIRECT
+                }
+                // 直接设置调用成功但状态未变：此环境不支持，本会话内不再尝试
+                directSetWorked = false
             }
         }
 
