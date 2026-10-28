@@ -234,6 +234,8 @@ class EditorCaretWatcher {
      * cjkOnly=false（代码语境）：CJK → 中文（接续）；ASCII 字母 → fallback（默认英文）；
      * 数字/空格/符号 → null。
      * 组字保护：微软拼音组字中（"中zhong"）返回 null——此时必须完全静默。
+     * 引号边界：前字符是引号时语义取决于开/闭，不宜武断——Python 三引号结构旁
+     * （"""""" 中间、docstring 起始）→ 中文（与 docstring 规则一致）；其余引号 → null。
      */
     private fun charConsistencyTarget(editor: Editor, fallback: ImeMode?, cjkOnly: Boolean): ImeMode? {
         val offset = editor.caretModel.offset
@@ -242,6 +244,20 @@ class EditorCaretWatcher {
         val prev = seq[offset - 1]
         val prev2 = if (offset >= 2) seq[offset - 2] else null
         if (ImeMode.isComposingText(prev, prev2)) return null
+
+        // 引号边界：至少两个连续引号 + Python 文件 → 三引号 docstring 结构旁 → 中文
+        if (ImeMode.isQuote(prev)) {
+            if (prev2 != null && ImeMode.isQuote(prev2)) {
+                val project = editor.project
+                val lang = if (project != null) {
+                    com.intellij.psi.PsiDocumentManager.getInstance(project)
+                        .getPsiFile(editor.document)?.language?.id
+                } else null
+                if (lang == "Python") return ImeMode.CHINESE
+            }
+            return null
+        }
+
         val fromChar = ImeMode.fromChar(prev)
         return when {
             fromChar == ImeMode.CHINESE -> ImeMode.CHINESE

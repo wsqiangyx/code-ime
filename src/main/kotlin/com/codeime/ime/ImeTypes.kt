@@ -37,6 +37,9 @@ enum class ImeMode { CHINESE, ENGLISH;
             if (prevIsAsciiLetter && prev2 != null && isCjkChar(prev2)) return true
             return false
         }
+
+        /** 前字符是引号（字符串边界，语义取决于开/闭，不宜武断判定） */
+        fun isQuote(c: Char): Boolean = c == '"' || c == '\'' || c == '“' || c == '”' || c == '‘' || c == '’'
     }
 }
 

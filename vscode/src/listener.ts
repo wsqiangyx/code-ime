@@ -3,7 +3,7 @@ import { getConfig } from './config';
 import type { EditorContext } from './tm/types';
 import type { ImeAnalyzer } from './tm/analyzer';
 import { currentMode, assumedMode, syncAssumedMode, switchTo, type ImeMode } from './ime/imm32';
-import { isCjkChar, isComposingText, modeFromChar } from './char-mode';
+import { isCjkChar, isComposingText, isQuote, modeFromChar } from './char-mode';
 import type { StatusBarController } from './status';
 
 const DEBOUNCE_MS = 20;
@@ -85,18 +85,32 @@ export function registerListeners(
       const prev2Char = charAt(2);
       // 组字保护：微软拼音组字中（"中zhong"）完全静默，任何切换都会打断中文输入
       if (isComposingText(prevChar, prev2Char)) return;
+      // 引号边界：前字符是引号时语义取决于开/闭，不宜武断——
+      // Python 文件中至少两个连续引号（"""""" 中间、docstring 起始）→ 强制中文；
+      // 其余引号 → 不干预（避免误切）
+      const atQuoteBoundary =
+        isQuote(prevChar) && !(prev2Char && isQuote(prev2Char) && doc.languageId === 'python');
+      if (atQuoteBoundary) return;
       let target: ImeMode | null;
       if (ctx === 'comment') {
         target = 'chinese';
       } else if (ctx === 'string') {
         if (cfg.stringAsChinese) {
           target = 'chinese';
+        } else if (doc.languageId === 'python' && prev2Char && isQuote(prev2Char)) {
+          // Python 三引号结构旁：docstring 起始 → 中文
+          target = 'chinese';
         } else {
           // 字符一致性（跟随内容）：前字符是中文→保持中文；其余→切英文
           target = modeFromChar(prevChar) ?? 'english';
         }
       } else if (ctx === 'code') {
-        target = modeFromChar(prevChar) ?? 'english';
+        if (doc.languageId === 'python' && prev2Char && isQuote(prev2Char)) {
+          // """""" 中间在 PSI 里可能判为 code（空串对），docstring 起始 → 中文
+          target = 'chinese';
+        } else {
+          target = modeFromChar(prevChar) ?? 'english';
+        }
       } else {
         target = null;
       }

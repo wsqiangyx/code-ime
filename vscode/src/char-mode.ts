@@ -22,6 +22,11 @@ export function modeFromChar(ch: string): 'chinese' | 'english' | null {
   return null;
 }
 
+/** 前字符是引号（字符串边界，语义取决于开/闭，不宜武断判定） */
+export function isQuote(ch: string): boolean {
+  return ['"', "'", '“', '”', '‘', '’'].includes(ch);
+}
+
 /**
  * 微软拼音"组字中"检测：CJK 字符后紧跟未上屏的拼音字母（如 "中zhong"）。
  * 组字期间输入法必然处于中文模式且正在编辑，插件此时必须完全静默——
