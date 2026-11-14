@@ -83,11 +83,11 @@ class WindowsInputMethod : InputMethodController {
     override fun currentMode(): ImeMode? = callOnEdt { currentModeInternal() }
 
     override fun switchTo(target: ImeMode): SwitchResult {
-        if (!isAvailable()) { log.debug("switchTo skip: unavailable"); return SwitchResult.FAILED }
+        if (!isAvailable()) { log.info("switchTo skip: unavailable"); return SwitchResult.FAILED }
         val real = callOnEdt { currentModeInternal() }
         // 读不到真实状态时用虚拟状态判断"是否已处于目标模式"
         val current = real ?: assumedMode
-        log.debug("switchTo target=$target real=$real assumed=$assumedMode")
+        log.info("switchTo target=$target real=$real assumed=$assumedMode")
         if (current == target) return SwitchResult.NOOP
 
         // 读不到状态（新版 IDE 走 TSF，外部 ImmGetContext 返回 null）：
@@ -103,7 +103,7 @@ class WindowsInputMethod : InputMethodController {
 
         if (directViable) {
             val directOk = callOnEdt { directSetInternal(target) }
-            log.debug("directSet ok=$directOk")
+            log.info("directSet ok=$directOk")
             if (directOk) {
                 lastSwitchAt = System.currentTimeMillis()
                 assumedMode = target
@@ -113,24 +113,27 @@ class WindowsInputMethod : InputMethodController {
                 }
                 // 直接设置调用成功但状态未变：此环境不支持，本会话内不再尝试
                 directSetWorked = false
+            } else {
+                // API 调用直接失败：同样记忆，避免每次切换都空跑一遍
+                directSetWorked = false
             }
         }
 
         // 自适应节奏：微软拼音会忽略间隔过短的连续 Shift 切换（实测窗口 1.1~2.9s）。
-        // 4 次尝试，间隔 1.5s 递增：逐步跨出忽略窗口，同时避开「双击 Shift 全局搜索」判定。
-        // 日志实测：336 次切换 8 次失败（2.4%）均为落在忽略窗口内，此节奏可覆盖。
-        val retryWaits = longArrayOf(0L, 1500L, 3000L, 4500L)
+        // 注入最小间隔已由 pressHotkey 拉到 1.2s（让首次注入落在忽略窗口之外）；
+        // 重试间隔 600/1800ms 补位覆盖 2.0s/3.9s，3 次尝试覆盖整个窗口。
+        val retryWaits = longArrayOf(0L, 600L, 1800L)
         var attempt = 0
         while (attempt < retryWaits.size && settings.hotkeyCode != 0) {
             sleepQuietly(retryWaits[attempt])
             val pressed = pressHotkey(settings.hotkeyCode, settings.hotkeyModifiers)
-            log.debug("hotkey pressed attempt=$attempt ok=$pressed verifiable=$verifiable")
+            log.info("hotkey pressed attempt=$attempt ok=$pressed verifiable=$verifiable")
             if (pressed) {
                 lastSwitchAt = System.currentTimeMillis()
                 assumedMode = target
                 if (!verifiable) {
                     // 无法回读（TSF 架构）：热键已发出即认为完成，不再重试
-                    log.debug("switchTo UNVERIFIED (no IMM32 context) target=$target")
+                    log.info("switchTo UNVERIFIED (no IMM32 context) target=$target")
                     return SwitchResult.HOTKEY
                 }
                 if (verifyOnEdt(target)) return SwitchResult.HOTKEY
@@ -138,7 +141,7 @@ class WindowsInputMethod : InputMethodController {
             attempt++
         }
 
-        log.debug("switchTo FAILED target=$target")
+        log.info("switchTo FAILED target=$target")
         return SwitchResult.FAILED
     }
 
@@ -152,7 +155,7 @@ class WindowsInputMethod : InputMethodController {
         if (himc == null) {
             // 拿不到 IME 上下文（无 IME 的窗口，如某些 DirectX/游戏/渲染窗口）。
             // 不能假设"是英文"——那会让插件永远尝试切中文并永远失败。
-            log.debug("currentMode: HIMC=null (hwnd=${hwnd})")
+            log.info("currentMode: HIMC=null (hwnd=${hwnd})")
             return null
         }
         try {
@@ -199,7 +202,7 @@ class WindowsInputMethod : InputMethodController {
         for (delay in VERIFY_POLL_DELAYS_MS) {
             sleepQuietly(delay.toLong())
             val mode = callOnEdt { currentModeInternal() }
-            log.debug("verify mode=$mode want=$target after=${delay}ms")
+            log.info("verify mode=$mode want=$target after=${delay}ms")
             if (mode == target) return true
         }
         return false
@@ -284,7 +287,7 @@ class WindowsInputMethod : InputMethodController {
         private val VERIFY_POLL_DELAYS_MS = intArrayOf(20, 30, 45, 65, 90)
 
         /** 两次注入的最小间隔：避开微软拼音的忽略窗口与 IDE 双击 Shift 窗口 */
-        private const val HOTKEY_MIN_SPACING_MS = 800L
+        private const val HOTKEY_MIN_SPACING_MS = 1200L
 
         private const val KEYEVENTF_KEYUP = 0x0002
         private val INPUT_SIZE = WinUser.INPUT().size()

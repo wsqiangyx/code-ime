@@ -1,4 +1,54 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import java.io.File
+
+// ===== 本机 IDE 自动发现 =====
+// 扫描常见 JetBrains 安装根目录，按 product-info.json 内容识别安装（不依赖目录名，
+// 目录改名/多 IDE 并存都能识别），IntelliJ IDEA 优先于 PyCharm，同产品取构建号最高者。
+// 显式覆盖：用户级 ~/.gradle/gradle.properties 配 localIdePath=...（最高优先级）。
+val jetbrainsRoots = listOf(
+    "D:/software/JetBrains",
+    "C:/Program Files/JetBrains",
+    "C:/Program Files (x86)/JetBrains",
+    "D:/JetBrains",
+    "${System.getProperty("user.home")}/AppData/Local/JetBrains"
+).map { File(it.replace('\\', '/')) }.filter { it.isDirectory }
+
+data class IdeInstall(val dir: File, val productCode: String, val buildMajor: Int)
+
+fun scoreIde(productCode: String, buildMajor: Int): Int {
+    val base = when (productCode) {
+        "IU" -> 500
+        "IC" -> 400
+        "PY" -> 300
+        "PC" -> 290
+        else -> 100
+    }
+    return base * 100000 + buildMajor
+}
+
+fun discoverIdeInstalls(): List<IdeInstall> {
+    val installs = mutableListOf<IdeInstall>()
+    val seen = mutableSetOf<String>()
+    fun consider(dir: File) {
+        if (!seen.add(dir.absolutePath)) return
+        val info = File(dir, "product-info.json")
+        if (!info.isFile) return
+        val text = runCatching { info.readText() }.getOrDefault("")
+        val code = Regex("\"productCode\"\\s*:\\s*\"([A-Z]+)\"").find(text)?.groupValues?.get(1) ?: return
+        val build = Regex("\"buildNumber\"\\s*:\\s*\"([0-9][0-9.]*)\"").find(text)?.groupValues?.get(1) ?: return
+        if (!File(dir, "lib").isDirectory) return
+        val major = build.substringBefore('.').toIntOrNull() ?: return
+        installs += IdeInstall(dir, code, major)
+    }
+    for (root in jetbrainsRoots) {
+        root.listFiles { f -> f.isDirectory }?.forEach { child ->
+            consider(child)
+            // Toolbox 布局再深入一层（apps/<code>/ch-0/<version>）
+            child.listFiles { f -> f.isDirectory }?.forEach { consider(it) }
+        }
+    }
+    return installs
+}
 
 plugins {
     id("java")
@@ -7,7 +57,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.5.14"
+version = "1.5.16-diag"
 
 repositories {
     mavenCentral()
@@ -24,11 +74,16 @@ dependencies {
     testImplementation(kotlin("stdlib"))
 
     intellijPlatform {
-        // 优先对准本机安装的 IDEA（用户级 ~/.gradle/gradle.properties 配 localIdePath=...），
-        // 未配置时从 JetBrains 仓库下载对应版本（首次约 1GB，较慢）
-        val localIdePath = providers.gradleProperty("localIdePath").orNull
-        if (!localIdePath.isNullOrBlank()) {
-            local(localIdePath)
+        // 自动发现本机 IDE（IDEA 优先）；显式 localIdePath 属性最高优先；
+        // 都没有时从 JetBrains 仓库下载分发版（首次约 1GB，较慢）
+        val explicitIde = providers.gradleProperty("localIdePath").orNull
+            ?.let { p -> File(p.replace('\\', '/')) }?.takeIf { it.isDirectory }
+        val discovered = runCatching { discoverIdeInstalls() }.getOrNull()
+            ?.maxByOrNull { scoreIde(it.productCode, it.buildMajor) }
+        val ideDir: File? = explicitIde ?: discovered?.dir
+        println("CodeIME build: IDE = ${ideDir?.absolutePath ?: "未发现本机安装，将下载分发版"}")
+        if (ideDir != null) {
+            local(ideDir.absolutePath)
         } else {
             create(IntelliJPlatformType.IntellijIdeaCommunity, "2026.1.4")
         }
@@ -61,13 +116,16 @@ intellijPlatform {
     }
 
     pluginVerification {
-        // 对本机安装的 IDE 做兼容性验证（未配置 localIdePath 时回退到推荐版本列表）
-        val localIde = providers.gradleProperty("localIdePath").orNull
+        // 与上方自动发现保持一致：验证目标 = 本机 IDE（未发现时回退到推荐版本列表）
+        val ideDir = providers.gradleProperty("localIdePath").orNull
+            ?.let { p -> File(p.replace('\\', '/')) }?.takeIf { it.isDirectory }
+            ?: runCatching { discoverIdeInstalls() }.getOrNull()
+                ?.maxByOrNull { scoreIde(it.productCode, it.buildMajor) }?.dir
         ides {
-            if (localIde.isNullOrBlank()) {
-                recommended()
+            if (ideDir != null) {
+                local(ideDir.absolutePath)
             } else {
-                local(localIde)
+                recommended()
             }
         }
     }

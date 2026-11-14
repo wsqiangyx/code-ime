@@ -61,9 +61,9 @@ class ImeModePoller {
         lastKnown = mode
         if (attributedToPlugin) {
             if (wm != null) wm.syncAssumedMode(mode) // 插件生效，虚拟状态对齐真实
-            log.debug("mode change -> plugin (observed=$mode assumed=$assumed)")
+            log.info("mode change -> plugin (observed=$mode assumed=$assumed)")
         } else {
-            log.debug("mode change -> user (observed=$mode assumed=$assumed)")
+            log.info("mode change -> user (observed=$mode assumed=$assumed)")
             ApplicationManager.getApplication().invokeLater {
                 ApplicationManager.getApplication()
                     ?.getService(EditorCaretWatcher::class.java)
