@@ -57,7 +57,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.5.16-diag"
+version = "1.5.16"
 
 repositories {
     mavenCentral()
