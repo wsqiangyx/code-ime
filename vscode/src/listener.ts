@@ -85,12 +85,14 @@ export function registerListeners(
       const prev2Char = charAt(2);
       // 组字保护：微软拼音组字中（"中zhong"）完全静默，任何切换都会打断中文输入
       if (isComposingText(prevChar, prev2Char)) return;
-      // 引号边界：前字符是引号时语义取决于开/闭，不宜武断——
-      // Python 文件中至少两个连续引号（"""""" 中间、docstring 起始）→ 强制中文；
-      // 其余引号 → 不干预（避免误切）
+      // 引号边界：前字符是引号 → 字符串开头/结尾（内容待写）→ 默认英文；
+      // Python 文件中至少两个连续引号（"""""" 中间、docstring 起始）→ 中文
       const atQuoteBoundary =
         isQuote(prevChar) && !(prev2Char && isQuote(prev2Char) && doc.languageId === 'python');
-      if (atQuoteBoundary) return;
+      if (atQuoteBoundary) {
+        // （日志在调用方统一输出）
+        return 'english' as ImeMode;
+      }
       let target: ImeMode | null;
       if (ctx === 'comment') {
         target = 'chinese';

@@ -245,7 +245,8 @@ class EditorCaretWatcher {
         val prev2 = if (offset >= 2) seq[offset - 2] else null
         if (ImeMode.isComposingText(prev, prev2)) return null
 
-        // 引号边界：至少两个连续引号 + Python 文件 → 三引号 docstring 结构旁 → 中文
+        // 引号边界：前字符是引号 → 字符串开头/结尾（内容待写）→ 默认英文；
+        // Python 文件中至少两个连续引号（"""""" 中间、docstring 起始）→ 中文
         if (ImeMode.isQuote(prev)) {
             if (prev2 != null && ImeMode.isQuote(prev2)) {
                 val project = editor.project
@@ -255,7 +256,7 @@ class EditorCaretWatcher {
                 } else null
                 if (lang == "Python") return ImeMode.CHINESE
             }
-            return null
+            return fallback ?: ImeMode.ENGLISH
         }
 
         val fromChar = ImeMode.fromChar(prev)

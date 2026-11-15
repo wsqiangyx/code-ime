@@ -6,8 +6,39 @@ import { TmRegistry } from '../src/tm/registry';
 import { ImeAnalyzer } from '../src/tm/analyzer';
 import { isComposingText, modeFromChar } from '../src/char-mode';
 
-const VSCODE_EXTENSIONS =
-  process.env.VSCODE_EXTENSIONS ?? 'D:/software/VSCode/6d62b1d5da/resources/app/extensions';
+// 自动发现本机 VSCode 内置语法目录：扫描常见安装位置的 commit-hash 目录，取最新者。
+// 也可用 VSCODE_EXTENSIONS 环境变量显式指定（VSCode 升级换目录后无需改代码）。
+function discoverVscodeExtensionsRoot(): string {
+  const env = process.env.VSCODE_EXTENSIONS;
+  if (env) return env;
+  const bases = [
+    'D:/software/VSCode',
+    'C:/Program Files/Microsoft VS Code',
+    `${process.env.LOCALAPPDATA ?? ''}/Programs/Microsoft VS Code`,
+  ].filter(Boolean);
+  const candidates: { p: string; mtime: number }[] = [];
+  for (const base of bases) {
+    if (!fs.existsSync(base)) continue;
+    // 两层布局：base/<hash>/resources/app/extensions（commit-hash 安装）
+    for (const entry of fs.readdirSync(base, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const p = path.join(base, entry.name, 'resources', 'app', 'extensions');
+      if (fs.existsSync(p)) candidates.push({ p, mtime: fs.statSync(p).mtimeMs as number });
+      // 再进一层（base/<hash>/<sub>/resources/app/extensions）
+      for (const sub of fs.readdirSync(path.join(base, entry.name), { withFileTypes: true })) {
+        if (!sub.isDirectory()) continue;
+        const p2 = path.join(base, entry.name, sub.name, 'resources', 'app', 'extensions');
+        if (fs.existsSync(p2)) candidates.push({ p: p2, mtime: fs.statSync(p2).mtimeMs as number });
+      }
+    }
+  }
+  if (candidates.length === 0) {
+    throw new Error('未找到 VSCode extensions 目录，请设置 VSCODE_EXTENSIONS 环境变量');
+  }
+  return candidates.sort((a, b) => b.mtime - a.mtime)[0].p;
+}
+
+const VSCODE_EXTENSIONS = discoverVscodeExtensionsRoot();
 
 interface Case {
   lang: string;
