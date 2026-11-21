@@ -13,3 +13,4 @@ vscode/node_modules/
 vscode/dist/
 vscode/test-dist/
 vscode/*.vsix
+__pycache__/
