@@ -57,7 +57,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.5.17"
+version = "1.5.18"
 
 repositories {
     mavenCentral()
@@ -104,6 +104,19 @@ java {
     }
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    // 平台类是 Java 25 字节码（v69），JDK 21 的 javac 无法读取；
+    // fork 到发现到的 IDE 自带 JBR javac（25）编译，--release 21 保持输出字节码兼容
+    val jbrJavac = runCatching { discoverIdeInstalls() }.getOrNull()
+        ?.map { File(it.dir, "jbr/bin/javac.exe") }
+        ?.firstOrNull { it.isFile }
+    if (jbrJavac != null) {
+        options.isFork = true
+        options.forkOptions.executable = jbrJavac.absolutePath
+        options.release.set(21)
+    }
+}
+
 intellijPlatform {
     buildSearchableOptions = false
 
@@ -126,6 +139,12 @@ intellijPlatform {
                 local(ideDir.absolutePath)
             } else {
                 recommended()
+            }
+            // 复现 Marketplace 校验：-PverifyTarget=market 时额外验证 262/261
+            //（本机 IDE 都是 263，查不出"263 才有、262/261 没有"的 API 引用）
+            if (providers.gradleProperty("verifyTarget").orNull == "market") {
+                create(IntelliJPlatformType.IntellijIdeaUltimate, "2026.2.5")
+                create(IntelliJPlatformType.IntellijIdeaUltimate, "2026.1.5.1")
             }
         }
     }

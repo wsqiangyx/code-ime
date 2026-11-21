@@ -121,7 +121,7 @@ class EditorCaretWatcher {
             val projects = com.intellij.openapi.project.ProjectManager.getInstanceIfCreated()?.openProjects
             val editor = projects
                 ?.firstNotNullOfOrNull { p ->
-                    com.intellij.openapi.fileEditor.FileEditorManager.getInstance(p).selectedTextEditor
+                    com.codeime.compat.FileEditorManagers.getInstance(p).selectedTextEditor
                 } ?: return@invokeLater
             val project = editor.project ?: return@invokeLater
             evaluate(project, editor)
@@ -161,7 +161,7 @@ class EditorCaretWatcher {
         val projects = com.intellij.openapi.project.ProjectManager.getInstanceIfCreated()?.openProjects
         val editor = projects
             ?.firstNotNullOfOrNull { p ->
-                com.intellij.openapi.fileEditor.FileEditorManager.getInstance(p).selectedTextEditor
+                com.codeime.compat.FileEditorManagers.getInstance(p).selectedTextEditor
             } ?: return null
         val project = editor.project ?: return null
         return runCatching {
@@ -185,7 +185,7 @@ class EditorCaretWatcher {
         // 1) 必须是当前选中的文件：后台标签页/工具窗口里的编辑器不应触发切换。
         // 注意用文件比较而非编辑器对象同一性——PyCharm 2026.x 中 selectedTextEditor
         // 可能返回与监听器持有的不同实例，对象比较会把一切拦死。
-        val selected = com.intellij.openapi.fileEditor.FileEditorManager
+        val selected = com.codeime.compat.FileEditorManagers
             .getInstance(project).selectedTextEditor
         if (selected != null && selected !== editor) {
             val selectedFile = selected.document
