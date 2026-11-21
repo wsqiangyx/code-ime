@@ -57,7 +57,7 @@ plugins {
 }
 
 group = "com.codeime"
-version = "1.5.18"
+version = "1.5.19"
 
 repositories {
     mavenCentral()
@@ -94,6 +94,10 @@ kotlin {
     compilerOptions {
         // 字节码目标：IDEA 2026.1 平台要求的最低 Java 版本
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+        // jvm-default=all：不在实现类里生成兼容桥接方法。
+        // all-compatibility 模式（默认）会给继承 Kotlin 接口默认方法的类生成 ACC_BRIDGE
+        // 兼容方法（如 getPresentation(PlatformType)），验证器会误判为"覆写弃用方法"
+        freeCompilerArgs.add("-Xjvm-default=all")
     }
 }
 

@@ -165,9 +165,11 @@ class EditorCaretWatcher {
             } ?: return null
         val project = editor.project ?: return null
         return runCatching {
-            com.intellij.openapi.application.WriteIntentReadAction.compute<EditorContext> {
-                ContextAnalyzer.analyze(editor, project)
-            }
+            var result: EditorContext? = null
+            com.intellij.openapi.application.ReadAction.runBlocking(
+                com.intellij.util.ThrowableRunnable { result = ContextAnalyzer.analyze(editor, project) }
+            )
+            result
         }.getOrNull()
     }
 
@@ -317,11 +319,13 @@ class EditorCaretWatcher {
         val settings = CodeImeSettings.getInstance().state
         if (!settings.enabled) { log.debug("evaluate skip: disabled"); return }
 
-        // EDT 上访问 PSI 需要 WriteIntentReadAction（2026.2 起强制断言；
-        // 旧写法 ReadAction.compute 已弃用——1.5.1 的回归正是移除读锁导致）
-        val context = com.intellij.openapi.application.WriteIntentReadAction.compute<EditorContext> {
-            ContextAnalyzer.analyze(editor, project)
-        }
+        // EDT 上访问 PSI 需持读锁（1.5.1 的回归正是移除读锁导致）。
+        // runBlocking 是三版本（261/262/263）都稳定的方法：
+        // compute(ThrowableComputable) 已弃用、WriteIntentReadAction 是 experimental
+        var context = EditorContext.CODE
+        com.intellij.openapi.application.ReadAction.runBlocking(
+            com.intellij.util.ThrowableRunnable { context = ContextAnalyzer.analyze(editor, project) }
+        )
 
         // PSI 滞后兜底：PSI 认为是代码，但光标所在行前面已经出现了 "//"，按注释处理
         val effective = if (context == EditorContext.CODE && lineBeforeCaretContainsLineComment(editor)) {
